@@ -45,20 +45,26 @@ export const App: React.FC = () => {
   const [status, setStatus] = useState<GitRepoStatus | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotMetadata[]>([]);
   const [actions, setActions] = useState<HumanGitAction[]>([]);
-  const [activeTab, setActiveTab] = useState<'checkpoint' | 'split' | 'sync' | 'timeline'>('checkpoint');
+  const [localBranches, setLocalBranches] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'checkpoint' | 'split' | 'sync' | 'timeline' | 'promote'>('checkpoint');
 
-  // Checkpoint tab state
+  // Checkpoint state
   const [checkpointLabel, setCheckpointLabel] = useState('');
 
-  // Splitter tab state
+  // Splitter state
   const [branchA, setBranchA] = useState('feature/part-1');
   const [commitA, setCommitA] = useState('feat: initial slice');
   const [selectedForA, setSelectedForA] = useState<Record<string, boolean>>({});
   const [branchB, setBranchB] = useState('feature/part-2');
   const [commitB, setCommitB] = useState('feat: second slice');
 
-  // Sync tab state
+  // Sync state
   const [syncStrategy, setSyncStrategy] = useState<'rebase' | 'merge'>('rebase');
+
+  // Promote state (Split branch to new repo)
+  const [promoteSourceBranch, setPromoteSourceBranch] = useState('template/antigravity-starter');
+  const [promoteRepoName, setPromoteRepoName] = useState('antigravity-starter');
+  const [promoteVisibility, setPromoteVisibility] = useState<'public' | 'private'>('public');
 
   useEffect(() => {
     vscode.postMessage({ type: 'GET_STATUS' });
@@ -69,6 +75,7 @@ export const App: React.FC = () => {
         setStatus(data.status);
         setSnapshots(data.snapshots || []);
         if (data.actions) setActions(data.actions);
+        if (data.localBranches) setLocalBranches(data.localBranches);
       }
     };
 
@@ -104,7 +111,7 @@ export const App: React.FC = () => {
       return;
     }
     if (filesB.length === 0) {
-      alert('Branch B must also have at least one file. If you only want one branch, just commit directly.');
+      alert('Branch B must also have at least one file.');
       return;
     }
 
@@ -128,6 +135,23 @@ export const App: React.FC = () => {
 
   const handleUndoLast = () => {
     vscode.postMessage({ type: 'UNDO_LAST' });
+  };
+
+  const handlePromoteToNewRepo = () => {
+    vscode.postMessage({
+      type: 'SPLIT_TO_NEW_REPO',
+      options: {
+        sourceBranch: promoteSourceBranch.trim(),
+        newRepoName: promoteRepoName.trim(),
+        targetBranch: 'main',
+        visibility: promoteVisibility,
+        description: 'Universal Antigravity & Claude Code bootstrap template'
+      }
+    });
+  };
+
+  const handlePushMain = () => {
+    vscode.postMessage({ type: 'PUSH_MAIN' });
   };
 
   return (
@@ -154,31 +178,33 @@ export const App: React.FC = () => {
               color: '#fff'
             }}
           >
-            {allDirtyFiles.length > 0 ? `${allDirtyFiles.length} files dirty` : 'Clean'}
+            {allDirtyFiles.length > 0 ? `${allDirtyFiles.length} dirty` : 'Clean'}
           </span>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
         {[
           { id: 'checkpoint', label: '🛡️ Save' },
           { id: 'split', label: '✂️ Split' },
           { id: 'sync', label: '🔄 Sync' },
-          { id: 'timeline', label: '⏪ Undo' }
+          { id: 'timeline', label: '⏪ Undo' },
+          { id: 'promote', label: '🚀 Repo' }
         ].map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id as any)}
             style={{
-              padding: '7px 4px',
+              padding: '7px 2px',
               background: activeTab === t.id ? 'var(--vscode-button-background)' : 'transparent',
               color: activeTab === t.id ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
               border: '1px solid var(--vscode-button-border, rgba(255,255,255,0.15))',
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '11px',
-              fontWeight: 500
+              fontWeight: 500,
+              textAlign: 'center'
             }}
           >
             {t.label}
@@ -237,7 +263,6 @@ export const App: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Branch A settings */}
               <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px' }}>
                 <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>Branch A (Checked Files):</div>
                 <input
@@ -256,9 +281,8 @@ export const App: React.FC = () => {
                 />
               </div>
 
-              {/* File partition selector */}
               <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', padding: '6px', borderRadius: '4px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>Check files for Branch A (Unchecked go to B):</div>
+                <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>Select files for Branch A:</div>
                 {allDirtyFiles.map((file) => (
                   <label key={file} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', padding: '2px 0' }}>
                     <input
@@ -271,7 +295,6 @@ export const App: React.FC = () => {
                 ))}
               </div>
 
-              {/* Branch B settings */}
               <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px' }}>
                 <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>Branch B (Remaining Files):</div>
                 <input
@@ -314,7 +337,7 @@ export const App: React.FC = () => {
       {activeTab === 'sync' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <p style={{ margin: 0, fontSize: '12px', opacity: 0.85 }}>
-            Fetch and pull changes from remote safely. If any conflict happens, GitWizard automatically aborts and restores your code.
+            Fetch and pull changes from remote safely. Automatically aborts and restores your workspace if conflicts occur.
           </p>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
@@ -324,7 +347,7 @@ export const App: React.FC = () => {
                 checked={syncStrategy === 'rebase'}
                 onChange={() => setSyncStrategy('rebase')}
               />
-              Rebase (Clean history)
+              Rebase
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
               <input
@@ -333,7 +356,7 @@ export const App: React.FC = () => {
                 checked={syncStrategy === 'merge'}
                 onChange={() => setSyncStrategy('merge')}
               />
-              Merge commit
+              Merge
             </label>
           </div>
           <button
@@ -370,7 +393,7 @@ export const App: React.FC = () => {
               fontSize: '12px'
             }}
           >
-            ⏪ Undo Last Git Action (HEAD@&#123;1&#125;)
+            ⏪ Undo Last Action (HEAD@&#123;1&#125;)
           </button>
 
           <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>Saved Checkpoints:</div>
@@ -421,6 +444,89 @@ export const App: React.FC = () => {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* TAB 5: Promote / Split to New Repo */}
+      {activeTab === 'promote' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p style={{ margin: 0, fontSize: '12px', opacity: 0.85 }}>
+            Promote an experimental branch into its own brand new GitHub repository as <code>main</code>.
+          </p>
+
+          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600 }}>Source Branch:</div>
+            <input
+              type="text"
+              value={promoteSourceBranch}
+              onChange={(e) => setPromoteSourceBranch(e.target.value)}
+              placeholder="e.g. template/antigravity-starter"
+              style={{ padding: '5px', fontSize: '11px' }}
+            />
+
+            <div style={{ fontSize: '11px', fontWeight: 600 }}>New GitHub Repo Name:</div>
+            <input
+              type="text"
+              value={promoteRepoName}
+              onChange={(e) => setPromoteRepoName(e.target.value)}
+              placeholder="e.g. antigravity-starter"
+              style={{ padding: '5px', fontSize: '11px' }}
+            />
+
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '11px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="visibility"
+                  checked={promoteVisibility === 'public'}
+                  onChange={() => setPromoteVisibility('public')}
+                />
+                Public
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="visibility"
+                  checked={promoteVisibility === 'private'}
+                  onChange={() => setPromoteVisibility('private')}
+                />
+                Private
+              </label>
+            </div>
+          </div>
+
+          <button
+            onClick={handlePromoteToNewRepo}
+            style={{
+              padding: '9px',
+              background: 'var(--vscode-button-background)',
+              color: 'var(--vscode-button-foreground)',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px'
+            }}
+          >
+            🚀 Create & Publish Standalone Repo
+          </button>
+
+          <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '4px 0' }} />
+
+          <button
+            onClick={handlePushMain}
+            style={{
+              padding: '7px',
+              background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+              color: 'var(--vscode-button-secondaryForeground, #ffffff)',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '11px'
+            }}
+          >
+            ⬆️ Push GitWizard (main) to Origin
+          </button>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { CheckpointWizard } from '../wizards/checkpoint';
 import { BranchSplitterWizard, SplitRequest } from '../wizards/split';
 import { SafeSyncWizard } from '../wizards/sync';
 import { UndoWizard } from '../wizards/undo';
+import { RepoSplitterWizard, SplitToNewRepoOptions } from '../wizards/publish';
 
 class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'gitwizard.sidebarView';
@@ -19,6 +20,7 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _splitterWizard: BranchSplitterWizard,
     private readonly _syncWizard: SafeSyncWizard,
     private readonly _undoWizard: UndoWizard,
+    private readonly _repoSplitterWizard: RepoSplitterWizard,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -120,6 +122,38 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           }
           break;
         }
+
+        case 'SPLIT_TO_NEW_REPO': {
+          try {
+            vscode.window.showInformationMessage(`GitWizard: Promoting '${data.options.sourceBranch}' to new repo '${data.options.newRepoName}'...`);
+            const res = await this._repoSplitterWizard.splitToNewRepo(data.options);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Error: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Split to Repo Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'PUSH_MAIN': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Pushing main branch to origin...');
+            const res = await this._repoSplitterWizard.pushToOrigin('main');
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Push Error: ${err.message}`);
+          }
+          break;
+        }
       }
     });
   }
@@ -129,11 +163,15 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
       const status = await this._git.getStatus();
       const snapshots = await this._checkpointWizard.listCheckpoints();
       const actions = await this._undoWizard.getRecentActions(10);
+      const branchesRes = await this._git.exec(['branch', '--format=%(refname:short)'], { allowFailure: true });
+      const localBranches = branchesRes.exitCode === 0 && branchesRes.stdout ? branchesRes.stdout.split('\n').filter(Boolean) : [];
+
       this._view?.webview.postMessage({
         type: 'STATUS_UPDATE',
         status,
         snapshots,
-        actions
+        actions,
+        localBranches
       });
       await this._updateStatusBar();
     } catch (err) {
@@ -192,6 +230,7 @@ export function activate(context: vscode.ExtensionContext) {
   const splitterWizard = new BranchSplitterWizard(git, snapshotManager, runner);
   const syncWizard = new SafeSyncWizard(git, snapshotManager);
   const undoWizard = new UndoWizard(git, snapshotManager);
+  const repoSplitterWizard = new RepoSplitterWizard(git, snapshotManager, runner);
 
   // Status Bar Item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -225,6 +264,7 @@ export function activate(context: vscode.ExtensionContext) {
     splitterWizard,
     syncWizard,
     undoWizard,
+    repoSplitterWizard,
     updateStatusBar
   );
 
@@ -286,7 +326,49 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Initial status bar update
+  // Split to New Repo Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.splitToNewRepo', async () => {
+      const branch = await vscode.window.showInputBox({
+        prompt: 'Enter branch to promote to new repo:',
+        value: 'template/antigravity-starter'
+      });
+      if (!branch) return;
+
+      const repoName = await vscode.window.showInputBox({
+        prompt: 'Enter name for the new GitHub repo:',
+        value: 'antigravity-starter'
+      });
+      if (!repoName) return;
+
+      const res = await repoSplitterWizard.splitToNewRepo({
+        sourceBranch: branch,
+        newRepoName: repoName,
+        targetBranch: 'main'
+      });
+
+      if (res.success) {
+        vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+      } else {
+        vscode.window.showErrorMessage(`GitWizard Error: ${res.message}`);
+      }
+      provider.broadcastStatus();
+    })
+  );
+
+  // Push Main Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.pushMain', async () => {
+      const res = await repoSplitterWizard.pushToOrigin('main');
+      if (res.success) {
+        vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+      } else {
+        vscode.window.showErrorMessage(`GitWizard Error: ${res.message}`);
+      }
+      provider.broadcastStatus();
+    })
+  );
+
   updateStatusBar();
 }
 
