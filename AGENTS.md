@@ -26,6 +26,7 @@ GitWizard/
 │       ├── sprint-manager/  # Skill for managing sprint states and progress
 │       └── git-safety/      # Skill for safe Git transaction patterns
 ├── docs/                    # Living architectural documentation
+│   ├── PRD.md               # Product Requirements Document & MVP specs
 │   ├── ARCHITECTURE.md      # Extension architecture & Safety Engine design
 │   └── ROADMAP.md           # Sprint status, backlog, and acceptance criteria
 ├── src/
