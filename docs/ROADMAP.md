@@ -8,8 +8,8 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 | Sprint | Goal | Target Status |
 | :--- | :--- | :--- |
-| **Sprint 1: Foundation & Safety Engine** | Scaffolding, TypeScript config, `GitClient`, `SnapshotManager`, `TransactionRunner`, unit tests | Ready to Start |
-| **Sprint 2: Intent Wizard Orchestration** | Checkpoint, Splitter, Safe Sync, and Undo engine workflows with mock/test suites | Planned |
+| **Sprint 1: Foundation & Safety Engine** | Scaffolding, TypeScript config, `GitClient`, `SnapshotManager`, `TransactionRunner`, unit tests | Completed (Verified) |
+| **Sprint 2: Intent Wizard Orchestration** | Checkpoint, Splitter, Safe Sync, and Undo engine workflows with mock/test suites | Ready to Start |
 | **Sprint 3: Extension Host & Webview UI** | Sidebar Webview Provider, message passing, responsive dark-mode UI, step-by-step wizard flow | Planned |
 | **Sprint 4: Integration & Packaging** | End-to-end testing in real Git repositories, packaging `.vsix` for VS Code / Antigravity / Cursor | Planned |
 
@@ -19,23 +19,24 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 ### Sprint 1: Foundation & Safety Engine
 * **Objective**: Build a 100% reliable, zero-data-loss Git safety and transaction engine with automated test coverage.
+* **Status**: Completed & Verified (7/7 tests passing in Vitest, build & typecheck clean)
 * **Tasks**:
-  - [ ] **1.1 Project Setup**: `package.json`, TypeScript config (`tsconfig.json`), ESLint, Vitest setup for rapid unit testing.
-  - [ ] **1.2 Safe Git Wrapper (`GitClient`)**:
-    - [ ] `execGit` helper with error formatting, timeouts, and sanitized outputs.
-    - [ ] Methods for status, branch listing, tree writing, diffing, and ref updates.
-  - [ ] **1.3 Snapshot Manager (`SnapshotManager`)**:
-    - [ ] Create shadow commit using `git stash create` / `git write-tree` without altering HEAD.
-    - [ ] Tag snapshot in `refs/gitwizard/snapshots/*`.
-    - [ ] Untracked file backup and tracking.
-    - [ ] Restore snapshot function with rollback verification.
-  - [ ] **1.4 Transaction Runner (`TransactionRunner`)**:
-    - [ ] Sequential step execution pipeline.
-    - [ ] Automatic abort of active Git states (`merge --abort`, `rebase --abort`).
-    - [ ] Automatic rollback on unexpected command failures.
-  - [ ] **1.5 Engine Unit Tests**:
-    - [ ] Test snapshot creation & restoration in isolated temporary git repos.
-    - [ ] Test transaction failure rollback guaranteeing no lost files.
+  - [x] **1.1 Project Setup**: `package.json`, TypeScript config (`tsconfig.json`), esbuild bundle script, Vitest setup for rapid unit testing.
+  - [x] **1.2 Safe Git Wrapper (`GitClient`)**:
+    - [x] `exec` helper with error formatting, timeouts, and sanitized outputs.
+    - [x] Methods for status, branch listing, tree writing, diffing, and ref updates.
+  - [x] **1.3 Snapshot Manager (`SnapshotManager`)**:
+    - [x] Create shadow commit using `git stash create` / `git write-tree` without altering HEAD.
+    - [x] Tag snapshot in `refs/gitwizard/snapshots/*`.
+    - [x] Untracked file backup and tracking.
+    - [x] Restore snapshot function with rollback verification.
+  - [x] **1.4 Transaction Runner (`TransactionRunner`)**:
+    - [x] Sequential step execution pipeline.
+    - [x] Automatic abort of active Git states (`merge --abort`, `rebase --abort`).
+    - [x] Automatic rollback on unexpected command failures.
+  - [x] **1.5 Engine Unit Tests**:
+    - [x] Test snapshot creation & restoration in isolated temporary git repos.
+    - [x] Test transaction failure rollback guaranteeing no lost files.
 
 ### Sprint 2: Intent Wizards Logic
 * **Objective**: Implement the 4 core vibe-coder wizard recipes on top of the Safety Engine.

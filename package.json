@@ -1,0 +1,78 @@
+{
+  "name": "gitwizard",
+  "displayName": "GitWizard",
+  "description": "Intent-based Git safety and orchestration extension for vibe coders",
+  "version": "0.1.0",
+  "publisher": "dr-opensource",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onView:gitwizard.sidebarView"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitwizard-sidebar",
+          "title": "GitWizard",
+          "icon": "$(wand)"
+        }
+      ]
+    },
+    "views": {
+      "gitwizard-sidebar": [
+        {
+          "type": "webview",
+          "id": "gitwizard.sidebarView",
+          "name": "GitWizard Assistant"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gitwizard.createCheckpoint",
+        "title": "GitWizard: Create Safety Checkpoint",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.restoreCheckpoint",
+        "title": "GitWizard: Restore Checkpoint",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.splitChanges",
+        "title": "GitWizard: Split Changes into Branches",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.safeSync",
+        "title": "GitWizard: Safe Sync with Remote",
+        "category": "GitWizard"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  }
+}
