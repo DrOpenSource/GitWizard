@@ -9,8 +9,8 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 | Sprint | Goal | Target Status |
 | :--- | :--- | :--- |
 | **Sprint 1: Foundation & Safety Engine** | Scaffolding, TypeScript config, `GitClient`, `SnapshotManager`, `TransactionRunner`, unit tests | Completed (Verified) |
-| **Sprint 2: Intent Wizard Orchestration** | Checkpoint, Splitter, Safe Sync, and Undo engine workflows with mock/test suites | Ready to Start |
-| **Sprint 3: Extension Host & Webview UI** | Sidebar Webview Provider, message passing, responsive dark-mode UI, step-by-step wizard flow | Planned |
+| **Sprint 2: Intent Wizard Orchestration** | Checkpoint, Splitter, Safe Sync, and Undo engine workflows with mock/test suites | Completed (Verified) |
+| **Sprint 3: Extension Host & Webview UI** | Sidebar Webview Provider, message passing, responsive dark-mode UI, step-by-step wizard flow | Ready to Start |
 | **Sprint 4: Integration & Packaging** | End-to-end testing in real Git repositories, packaging `.vsix` for VS Code / Antigravity / Cursor | Planned |
 
 ---
@@ -40,11 +40,12 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 ### Sprint 2: Intent Wizards Logic
 * **Objective**: Implement the 4 core vibe-coder wizard recipes on top of the Safety Engine.
+* **Status**: Completed & Verified (17/17 tests passing in Vitest, UI & extension wired)
 * **Tasks**:
-  - [ ] **2.1 Checkpoint Flow**: Instant one-click snapshot with user label, listing snapshots, one-click restore.
-  - [ ] **2.2 Branch Splitter Flow**: Take dirty working directory, partition files into Group A & Group B, create dedicated branches & commits cleanly.
-  - [ ] **2.3 Safe Remote Sync Flow**: Check remote tracking, snapshot dirty state, pull/rebase, detect conflict and cleanly abort back if needed.
-  - [ ] **2.4 Undo Flow**: Parse `git reflog` into human-friendly actions (e.g., "Merged branch X", "Committed Y") and safely unwind.
+  - [x] **2.1 Checkpoint Flow**: Instant one-click snapshot with user label, listing snapshots, one-click restore.
+  - [x] **2.2 Branch Splitter Flow**: Take dirty working directory, partition files into Group A & Group B, create dedicated branches & commits cleanly.
+  - [x] **2.3 Safe Remote Sync Flow**: Check remote tracking, snapshot dirty state, pull/rebase, detect conflict and cleanly abort back if needed.
+  - [x] **2.4 Undo Flow**: Parse `git reflog` into human-friendly actions (e.g., "Merged branch X", "Committed Y") and safely unwind.
 
 ### Sprint 3: Extension Host & Webview UI
 * **Objective**: Build the user-facing UI in VS Code Activity Bar with a seamless, theme-aware wizard interface.

@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 import { GitClient } from '../engine/git-client';
 import { SnapshotManager } from '../engine/snapshot';
 import { TransactionRunner } from '../engine/transaction';
+import { CheckpointWizard } from '../wizards/checkpoint';
+import { BranchSplitterWizard, SplitRequest } from '../wizards/split';
+import { SafeSyncWizard } from '../wizards/sync';
+import { UndoWizard } from '../wizards/undo';
 
 class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'gitwizard.sidebarView';
@@ -11,12 +15,15 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     private readonly _git: GitClient,
     private readonly _snapshotManager: SnapshotManager,
-    private readonly _runner: TransactionRunner
+    private readonly _checkpointWizard: CheckpointWizard,
+    private readonly _splitterWizard: BranchSplitterWizard,
+    private readonly _syncWizard: SafeSyncWizard,
+    private readonly _undoWizard: UndoWizard
   ) {}
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
+    _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ) {
     this._view = webviewView;
@@ -31,49 +38,105 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
         case 'GET_STATUS': {
-          const status = await this._git.getStatus();
-          const snapshots = await this._snapshotManager.listSnapshots();
-          this._view?.webview.postMessage({
-            type: 'STATUS_UPDATE',
-            status,
-            snapshots
-          });
+          await this.broadcastStatus();
           break;
         }
+
         case 'CREATE_CHECKPOINT': {
           try {
-            const snap = await this._snapshotManager.createSnapshot(data.label || 'checkpoint');
-            vscode.window.showInformationMessage(`GitWizard: Checkpoint '${snap.label}' saved!`);
-            const status = await this._git.getStatus();
-            const snapshots = await this._snapshotManager.listSnapshots();
-            this._view?.webview.postMessage({
-              type: 'STATUS_UPDATE',
-              status,
-              snapshots
-            });
+            const snap = await this._checkpointWizard.saveCheckpoint(data.label || 'checkpoint');
+            vscode.window.showInformationMessage(`GitWizard: Checkpoint '${snap.label}' captured!`);
+            await this.broadcastStatus();
           } catch (err: any) {
             vscode.window.showErrorMessage(`GitWizard Error: ${err.message}`);
           }
           break;
         }
+
         case 'RESTORE_CHECKPOINT': {
           try {
-            await this._snapshotManager.restoreSnapshot(data.snapshotId);
+            await this._checkpointWizard.restoreCheckpoint(data.snapshotId);
             vscode.window.showInformationMessage(`GitWizard: Successfully restored checkpoint!`);
-            const status = await this._git.getStatus();
-            const snapshots = await this._snapshotManager.listSnapshots();
-            this._view?.webview.postMessage({
-              type: 'STATUS_UPDATE',
-              status,
-              snapshots
-            });
+            await this.broadcastStatus();
           } catch (err: any) {
             vscode.window.showErrorMessage(`GitWizard Restore Error: ${err.message}`);
           }
           break;
         }
+
+        case 'SPLIT_CHANGES': {
+          try {
+            const req: SplitRequest = data.request;
+            const res = await this._splitterWizard.splitChanges(req);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: Successfully split changes into ${res.createdBranches.join(', ')}!`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Split Error: ${res.error}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Split Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'SAFE_SYNC': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Syncing with remote safely...');
+            const res = await this._syncWizard.safeSync({ strategy: data.strategy || 'rebase' });
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showWarningMessage(`GitWizard: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Sync Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'UNDO_LAST': {
+          try {
+            const res = await this._undoWizard.undoLastAction();
+            vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Undo Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'GET_RECENT_ACTIONS': {
+          try {
+            const actions = await this._undoWizard.getRecentActions(20);
+            this._view?.webview.postMessage({
+              type: 'RECENT_ACTIONS_RESPONSE',
+              actions
+            });
+          } catch (err: any) {
+            console.error('Failed to get recent reflog actions:', err);
+          }
+          break;
+        }
       }
     });
+  }
+
+  public async broadcastStatus() {
+    try {
+      const status = await this._git.getStatus();
+      const snapshots = await this._checkpointWizard.listCheckpoints();
+      const actions = await this._undoWizard.getRecentActions(10);
+      this._view?.webview.postMessage({
+        type: 'STATUS_UPDATE',
+        status,
+        snapshots,
+        actions
+      });
+    } catch (err) {
+      console.error('Failed to broadcast status:', err);
+    }
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -121,11 +184,19 @@ export function activate(context: vscode.ExtensionContext) {
   const snapshotManager = new SnapshotManager(git);
   const runner = new TransactionRunner(git, snapshotManager);
 
+  const checkpointWizard = new CheckpointWizard(git, snapshotManager);
+  const splitterWizard = new BranchSplitterWizard(git, snapshotManager, runner);
+  const syncWizard = new SafeSyncWizard(git, snapshotManager);
+  const undoWizard = new UndoWizard(git, snapshotManager);
+
   const provider = new GitWizardSidebarProvider(
     context.extensionUri,
     git,
     snapshotManager,
-    runner
+    checkpointWizard,
+    splitterWizard,
+    syncWizard,
+    undoWizard
   );
 
   context.subscriptions.push(
@@ -136,15 +207,16 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('gitwizard.createCheckpoint', async () => {
       const label = await vscode.window.showInputBox({ prompt: 'Enter a label for this checkpoint:' });
       if (label !== undefined) {
-        const snap = await snapshotManager.createSnapshot(label || 'checkpoint');
-        vscode.window.showInformationMessage(`GitWizard: Checkpoint '${snap.label}' saved!`);
+        const snap = await checkpointWizard.saveCheckpoint(label || 'checkpoint');
+        vscode.window.showInformationMessage(`GitWizard: Checkpoint '${snap.label}' captured!`);
+        provider.broadcastStatus();
       }
     })
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.restoreCheckpoint', async () => {
-      const snaps = await snapshotManager.listSnapshots();
+      const snaps = await checkpointWizard.listCheckpoints();
       if (snaps.length === 0) {
         vscode.window.showInformationMessage('No GitWizard checkpoints found.');
         return;
@@ -156,9 +228,22 @@ export function activate(context: vscode.ExtensionContext) {
       }));
       const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Select checkpoint to restore:' });
       if (selected) {
-        await snapshotManager.restoreSnapshot(selected.id);
+        await checkpointWizard.restoreCheckpoint(selected.id);
         vscode.window.showInformationMessage(`GitWizard: Restored to checkpoint '${selected.label}'`);
+        provider.broadcastStatus();
       }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.safeSync', async () => {
+      const res = await syncWizard.safeSync();
+      if (res.success) {
+        vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+      } else {
+        vscode.window.showWarningMessage(`GitWizard: ${res.message}`);
+      }
+      provider.broadcastStatus();
     })
   );
 }

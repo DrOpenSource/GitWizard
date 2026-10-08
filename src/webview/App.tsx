@@ -6,7 +6,6 @@ declare function acquireVsCodeApi(): {
   setState(state: any): void;
 };
 
-// Safe acquire vscode API (singleton)
 let vscode: any = null;
 try {
   vscode = acquireVsCodeApi();
@@ -34,14 +33,34 @@ export interface SnapshotMetadata {
   branch: string;
 }
 
+export interface HumanGitAction {
+  hash: string;
+  selector: string;
+  category: 'commit' | 'merge' | 'checkout' | 'rebase' | 'reset' | 'other';
+  title: string;
+  timestamp: string;
+}
+
 export const App: React.FC = () => {
   const [status, setStatus] = useState<GitRepoStatus | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotMetadata[]>([]);
-  const [checkpointLabel, setCheckpointLabel] = useState('');
+  const [actions, setActions] = useState<HumanGitAction[]>([]);
   const [activeTab, setActiveTab] = useState<'checkpoint' | 'split' | 'sync' | 'timeline'>('checkpoint');
 
+  // Checkpoint tab state
+  const [checkpointLabel, setCheckpointLabel] = useState('');
+
+  // Splitter tab state
+  const [branchA, setBranchA] = useState('feature/part-1');
+  const [commitA, setCommitA] = useState('feat: initial slice');
+  const [selectedForA, setSelectedForA] = useState<Record<string, boolean>>({});
+  const [branchB, setBranchB] = useState('feature/part-2');
+  const [commitB, setCommitB] = useState('feat: second slice');
+
+  // Sync tab state
+  const [syncStrategy, setSyncStrategy] = useState<'rebase' | 'merge'>('rebase');
+
   useEffect(() => {
-    // Request initial status
     vscode.postMessage({ type: 'GET_STATUS' });
 
     const handleMessage = (event: MessageEvent) => {
@@ -49,12 +68,17 @@ export const App: React.FC = () => {
       if (data.type === 'STATUS_UPDATE') {
         setStatus(data.status);
         setSnapshots(data.snapshots || []);
+        if (data.actions) setActions(data.actions);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  const allDirtyFiles = status
+    ? Array.from(new Set([...status.staged, ...status.modified, ...status.untracked]))
+    : [];
 
   const handleCreateCheckpoint = () => {
     vscode.postMessage({
@@ -71,17 +95,48 @@ export const App: React.FC = () => {
     });
   };
 
-  const totalDirty = status
-    ? status.modified.length + status.staged.length + status.untracked.length
-    : 0;
+  const handleRunSplit = () => {
+    const filesA = Object.keys(selectedForA).filter((f) => selectedForA[f]);
+    const filesB = allDirtyFiles.filter((f) => !selectedForA[f]);
+
+    if (filesA.length === 0) {
+      alert('Please select at least one file for Branch A');
+      return;
+    }
+    if (filesB.length === 0) {
+      alert('Branch B must also have at least one file. If you only want one branch, just commit directly.');
+      return;
+    }
+
+    vscode.postMessage({
+      type: 'SPLIT_CHANGES',
+      request: {
+        groups: [
+          { branchName: branchA.trim(), commitMessage: commitA.trim(), files: filesA },
+          { branchName: branchB.trim(), commitMessage: commitB.trim(), files: filesB }
+        ]
+      }
+    });
+  };
+
+  const handleSafeSync = () => {
+    vscode.postMessage({
+      type: 'SAFE_SYNC',
+      strategy: syncStrategy
+    });
+  };
+
+  const handleUndoLast = () => {
+    vscode.postMessage({ type: 'UNDO_LAST' });
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {/* Header & Status Card */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Top Status Card */}
       <div
         style={{
           background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.06))',
-          padding: '12px',
+          padding: '10px 12px',
           borderRadius: '6px',
           border: '1px solid var(--vscode-widget-border, rgba(255,255,255,0.1))'
         }}
@@ -95,56 +150,51 @@ export const App: React.FC = () => {
               fontSize: '11px',
               padding: '2px 8px',
               borderRadius: '10px',
-              background: totalDirty > 0 ? 'var(--vscode-inputValidation-warningBackground, #855a00)' : 'var(--vscode-testing-iconPassed, #388a34)',
+              background: allDirtyFiles.length > 0 ? 'var(--vscode-inputValidation-warningBackground, #855a00)' : 'var(--vscode-testing-iconPassed, #388a34)',
               color: '#fff'
             }}
           >
-            {totalDirty > 0 ? `${totalDirty} modified` : 'Clean'}
+            {allDirtyFiles.length > 0 ? `${allDirtyFiles.length} files dirty` : 'Clean'}
           </span>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-        <button
-          onClick={() => setActiveTab('checkpoint')}
-          style={{
-            padding: '8px',
-            background: activeTab === 'checkpoint' ? 'var(--vscode-button-background)' : 'transparent',
-            color: activeTab === 'checkpoint' ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
-            border: '1px solid var(--vscode-button-border, rgba(255,255,255,0.15))',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          🛡️ Checkpoint
-        </button>
-        <button
-          onClick={() => setActiveTab('timeline')}
-          style={{
-            padding: '8px',
-            background: activeTab === 'timeline' ? 'var(--vscode-button-background)' : 'transparent',
-            color: activeTab === 'timeline' ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
-            border: '1px solid var(--vscode-button-border, rgba(255,255,255,0.15))',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px'
-          }}
-        >
-          ⏪ Time Machine ({snapshots.length})
-        </button>
+      {/* Navigation Tabs */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '4px' }}>
+        {[
+          { id: 'checkpoint', label: '🛡️ Save' },
+          { id: 'split', label: '✂️ Split' },
+          { id: 'sync', label: '🔄 Sync' },
+          { id: 'timeline', label: '⏪ Undo' }
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id as any)}
+            style={{
+              padding: '7px 4px',
+              background: activeTab === t.id ? 'var(--vscode-button-background)' : 'transparent',
+              color: activeTab === t.id ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
+              border: '1px solid var(--vscode-button-border, rgba(255,255,255,0.15))',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 500
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Checkpoint Tab */}
+      {/* TAB 1: Checkpoint */}
       {activeTab === 'checkpoint' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <p style={{ margin: 0, fontSize: '12px', opacity: 0.85 }}>
-            Save working tree instantly before asking AI to rewrite code. Non-destructive; won't pollute git log.
+            Capture working tree before asking AI to refactor. Zero commit clutter; 1-click restore.
           </p>
           <input
             type="text"
-            placeholder="Checkpoint label (e.g., before auth refactor)"
+            placeholder="Label (e.g., before UI rewrite)"
             value={checkpointLabel}
             onChange={(e) => setCheckpointLabel(e.target.value)}
             style={{
@@ -153,14 +203,13 @@ export const App: React.FC = () => {
               color: 'var(--vscode-input-foreground)',
               border: '1px solid var(--vscode-input-border)',
               borderRadius: '4px',
-              outline: 'none',
               fontSize: '12px'
             }}
           />
           <button
             onClick={handleCreateCheckpoint}
             style={{
-              padding: '9px',
+              padding: '8px',
               background: 'var(--vscode-button-background)',
               color: 'var(--vscode-button-foreground)',
               border: 'none',
@@ -170,52 +219,207 @@ export const App: React.FC = () => {
               fontSize: '12px'
             }}
           >
-            📸 Capture Safety Checkpoint
+            📸 Save Checkpoint
           </button>
         </div>
       )}
 
-      {/* Timeline Tab */}
-      {activeTab === 'timeline' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {snapshots.length === 0 ? (
-            <p style={{ fontSize: '12px', opacity: 0.7 }}>No checkpoints created yet.</p>
+      {/* TAB 2: Branch Splitter */}
+      {activeTab === 'split' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p style={{ margin: 0, fontSize: '12px', opacity: 0.85 }}>
+            Divide your modified files into two clean branches automatically.
+          </p>
+
+          {allDirtyFiles.length < 2 ? (
+            <div style={{ fontSize: '12px', opacity: 0.7, padding: '8px' }}>
+              Requires at least 2 modified or new files to split. Currently {allDirtyFiles.length} file(s) dirty.
+            </div>
           ) : (
-            snapshots.map((snap) => (
+            <>
+              {/* Branch A settings */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>Branch A (Checked Files):</div>
+                <input
+                  type="text"
+                  value={branchA}
+                  onChange={(e) => setBranchA(e.target.value)}
+                  placeholder="Branch A name"
+                  style={{ width: '100%', marginBottom: '4px', padding: '4px', fontSize: '11px' }}
+                />
+                <input
+                  type="text"
+                  value={commitA}
+                  onChange={(e) => setCommitA(e.target.value)}
+                  placeholder="Commit message A"
+                  style={{ width: '100%', padding: '4px', fontSize: '11px' }}
+                />
+              </div>
+
+              {/* File partition selector */}
+              <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', padding: '6px', borderRadius: '4px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>Check files for Branch A (Unchecked go to B):</div>
+                {allDirtyFiles.map((file) => (
+                  <label key={file} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', padding: '2px 0' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedForA[file]}
+                      onChange={(e) => setSelectedForA({ ...selectedForA, [file]: e.target.checked })}
+                    />
+                    <span>{file}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* Branch B settings */}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px', borderRadius: '4px' }}>
+                <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '4px' }}>Branch B (Remaining Files):</div>
+                <input
+                  type="text"
+                  value={branchB}
+                  onChange={(e) => setBranchB(e.target.value)}
+                  placeholder="Branch B name"
+                  style={{ width: '100%', marginBottom: '4px', padding: '4px', fontSize: '11px' }}
+                />
+                <input
+                  type="text"
+                  value={commitB}
+                  onChange={(e) => setCommitB(e.target.value)}
+                  placeholder="Commit message B"
+                  style={{ width: '100%', padding: '4px', fontSize: '11px' }}
+                />
+              </div>
+
+              <button
+                onClick={handleRunSplit}
+                style={{
+                  padding: '8px',
+                  background: 'var(--vscode-button-background)',
+                  color: 'var(--vscode-button-foreground)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px'
+                }}
+              >
+                ✂️ Execute Safe Split
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: Safe Sync */}
+      {activeTab === 'sync' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <p style={{ margin: 0, fontSize: '12px', opacity: 0.85 }}>
+            Fetch and pull changes from remote safely. If any conflict happens, GitWizard automatically aborts and restores your code.
+          </p>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="strategy"
+                checked={syncStrategy === 'rebase'}
+                onChange={() => setSyncStrategy('rebase')}
+              />
+              Rebase (Clean history)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="strategy"
+                checked={syncStrategy === 'merge'}
+                onChange={() => setSyncStrategy('merge')}
+              />
+              Merge commit
+            </label>
+          </div>
+          <button
+            onClick={handleSafeSync}
+            style={{
+              padding: '8px',
+              background: 'var(--vscode-button-background)',
+              color: 'var(--vscode-button-foreground)',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px'
+            }}
+          >
+            🔄 Sync with Remote
+          </button>
+        </div>
+      )}
+
+      {/* TAB 4: Time Machine / Undo */}
+      {activeTab === 'timeline' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            onClick={handleUndoLast}
+            style={{
+              padding: '7px',
+              background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+              color: 'var(--vscode-button-secondaryForeground, #ffffff)',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px'
+            }}
+          >
+            ⏪ Undo Last Git Action (HEAD@&#123;1&#125;)
+          </button>
+
+          <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>Saved Checkpoints:</div>
+          {snapshots.length === 0 ? (
+            <div style={{ fontSize: '11px', opacity: 0.6 }}>No checkpoints saved yet.</div>
+          ) : (
+            snapshots.map((s) => (
               <div
-                key={snap.id}
+                key={s.id}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: '8px 10px',
-                  background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.05))',
-                  borderRadius: '4px',
-                  border: '1px solid var(--vscode-widget-border, rgba(255,255,255,0.1))'
+                  padding: '6px 8px',
+                  background: 'rgba(255,255,255,0.04)',
+                  borderRadius: '4px'
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: '12px' }}>{snap.label}</div>
-                  <div style={{ fontSize: '10px', opacity: 0.6 }}>
-                    {new Date(snap.timestamp).toLocaleTimeString()} · branch: {snap.branch}
-                  </div>
+                  <div style={{ fontWeight: 600, fontSize: '11px' }}>{s.label}</div>
+                  <div style={{ fontSize: '10px', opacity: 0.5 }}>{new Date(s.timestamp).toLocaleTimeString()}</div>
                 </div>
                 <button
-                  onClick={() => handleRestoreCheckpoint(snap.id)}
+                  onClick={() => handleRestoreCheckpoint(s.id)}
                   style={{
-                    padding: '4px 8px',
-                    fontSize: '11px',
-                    background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
-                    color: 'var(--vscode-button-secondaryForeground, #ffffff)',
-                    border: 'none',
+                    padding: '3px 6px',
+                    fontSize: '10px',
+                    cursor: 'pointer',
                     borderRadius: '3px',
-                    cursor: 'pointer'
+                    border: 'none'
                   }}
                 >
                   Restore
                 </button>
               </div>
             ))
+          )}
+
+          {actions.length > 0 && (
+            <>
+              <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8, marginTop: '4px' }}>Recent Git Activity:</div>
+              <div style={{ maxHeight: '130px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {actions.map((act, i) => (
+                  <div key={i} style={{ fontSize: '10px', opacity: 0.75, padding: '3px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ fontWeight: 600 }}>{act.selector}:</span> {act.title}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
