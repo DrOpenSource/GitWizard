@@ -11,6 +11,11 @@
     "SCM Providers",
     "Other"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dr-opensource/GitWizard"
+  },
   "main": "./dist/extension.js",
   "activationEvents": [
     "onView:gitwizard.sidebarView"
@@ -54,6 +59,11 @@
         "command": "gitwizard.safeSync",
         "title": "GitWizard: Safe Sync with Remote",
         "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.focusSidebar",
+        "title": "GitWizard: Focus Assistant Sidebar",
+        "category": "GitWizard"
       }
     ]
   },
@@ -62,13 +72,15 @@
     "watch": "node esbuild.config.mjs --watch",
     "compile": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.20.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

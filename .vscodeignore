@@ -1,0 +1,10 @@
+.agents/**
+docs/**
+src/**
+test/**
+.git/**
+.gitignore
+tsconfig.json
+vitest.config.ts
+esbuild.config.mjs
+node_modules/**

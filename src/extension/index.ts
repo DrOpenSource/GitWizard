@@ -18,7 +18,8 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _checkpointWizard: CheckpointWizard,
     private readonly _splitterWizard: BranchSplitterWizard,
     private readonly _syncWizard: SafeSyncWizard,
-    private readonly _undoWizard: UndoWizard
+    private readonly _undoWizard: UndoWizard,
+    private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
   public resolveWebviewView(
@@ -134,6 +135,7 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
         snapshots,
         actions
       });
+      await this._updateStatusBar();
     } catch (err) {
       console.error('Failed to broadcast status:', err);
     }
@@ -156,6 +158,8 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       background-color: var(--vscode-sideBar-background);
+      box-sizing: border-box;
+      margin: 0;
     }
   </style>
 </head>
@@ -189,6 +193,30 @@ export function activate(context: vscode.ExtensionContext) {
   const syncWizard = new SafeSyncWizard(git, snapshotManager);
   const undoWizard = new UndoWizard(git, snapshotManager);
 
+  // Status Bar Item
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBarItem.command = 'gitwizard.focusSidebar';
+  statusBarItem.tooltip = 'GitWizard: Safe Git for Vibe Coders (Click to Open)';
+  statusBarItem.text = '$(wand) GitWizard';
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
+
+  const updateStatusBar = async () => {
+    try {
+      const status = await git.getStatus();
+      const dirtyCount = status.modified.length + status.staged.length + status.untracked.length;
+      if (dirtyCount === 0) {
+        statusBarItem.text = `$(wand) ${status.branch} (clean)`;
+        statusBarItem.backgroundColor = undefined;
+      } else {
+        statusBarItem.text = `$(wand) ${status.branch} (${dirtyCount} dirty)`;
+        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      }
+    } catch {
+      statusBarItem.text = '$(wand) GitWizard';
+    }
+  };
+
   const provider = new GitWizardSidebarProvider(
     context.extensionUri,
     git,
@@ -196,13 +224,22 @@ export function activate(context: vscode.ExtensionContext) {
     checkpointWizard,
     splitterWizard,
     syncWizard,
-    undoWizard
+    undoWizard,
+    updateStatusBar
   );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(GitWizardSidebarProvider.viewType, provider)
   );
 
+  // Focus Sidebar Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.focusSidebar', async () => {
+      await vscode.commands.executeCommand('gitwizard.sidebarView.focus');
+    })
+  );
+
+  // Checkpoint Command
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.createCheckpoint', async () => {
       const label = await vscode.window.showInputBox({ prompt: 'Enter a label for this checkpoint:' });
@@ -214,6 +251,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Restore Checkpoint Command
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.restoreCheckpoint', async () => {
       const snaps = await checkpointWizard.listCheckpoints();
@@ -235,6 +273,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Safe Sync Command
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.safeSync', async () => {
       const res = await syncWizard.safeSync();
@@ -246,6 +285,9 @@ export function activate(context: vscode.ExtensionContext) {
       provider.broadcastStatus();
     })
   );
+
+  // Initial status bar update
+  updateStatusBar();
 }
 
 export function deactivate() {}
