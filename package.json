@@ -13,10 +13,23 @@
     "Other"
   ],
   "license": "MIT",
+  "author": "Dr. Shubham Kashyap",
+  "homepage": "https://github.com/DrOpenSource/GitWizard#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dr-opensource/GitWizard"
+    "url": "https://github.com/DrOpenSource/GitWizard.git"
   },
+  "bugs": {
+    "url": "https://github.com/DrOpenSource/GitWizard/issues"
+  },
+  "keywords": [
+    "git",
+    "undo",
+    "checkpoint",
+    "ai-coding",
+    "source-control",
+    "safety"
+  ],
   "main": "./dist/extension.js",
   "activationEvents": [
     "onView:gitwizard.sidebarView"
