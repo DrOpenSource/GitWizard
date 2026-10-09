@@ -31,7 +31,11 @@ describe('BranchSplitterWizard', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(testRepoPath, { recursive: true, force: true });
+    try {
+      fs.rmSync(testRepoPath, { recursive: true, force: true });
+    } catch {
+      // Windows file handle release grace
+    }
   });
 
   it('splits modified and new files into two clean branches', async () => {

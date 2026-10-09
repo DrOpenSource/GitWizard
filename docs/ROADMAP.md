@@ -12,6 +12,7 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 | **Sprint 2: Intent Wizard Orchestration** | Checkpoint, Splitter, Safe Sync, and Undo engine workflows with mock/test suites | Completed (Verified) |
 | **Sprint 3: Extension Host & Webview UI** | Sidebar Webview Provider, message passing, responsive dark-mode UI, status bar indicator | Completed (Verified) |
 | **Sprint 4: Integration & Packaging** | Packaging `.vsix` for VS Code / Antigravity / Cursor, verification, and documentation | Completed (Verified) |
+| **Sprint 5: Vibe-First Ergonomics & Auto-Flight Recorder** | Daily essentials, background auto-checkpoints, virtual timeline rewind tree, plain-English action approvals | Completed (Verified) |
 
 ---
 
@@ -64,3 +65,17 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] **4.2 Build & Bundle**: esbuild bundle configuration for extension and webview.
   - [x] **4.3 VSIX Packaging**: Produced `gitwizard-0.1.0.vsix` ready to install in Antigravity, VS Code, and Cursor.
   - [x] **4.4 User Documentation**: Comprehensive README.md quickstart guide and demo walkthrough.
+
+### Sprint 5: Vibe-First Ergonomics & Auto-Flight Recorder
+* **Objective**: Eliminate user confusion by introducing Daily Essentials, Passive Auto-Checkpoints, a Virtual Timeline Tree, and Plain-English Action Approvals.
+* **Status**: Completed & Verified (20/20 unit tests passing, gitwizard-0.2.0.vsix packaged)
+* **Tasks**:
+  - [x] **5.1 Daily Essentials Wizard (`src/wizards/essentials.ts`)**: Safe commit, push, pull, uncommit (soft reset preserving 100% of local modifications), and branch switching.
+  - [x] **5.2 Auto-Checkpoint Controller (`src/engine/auto-checkpoint.ts`)**: Passive debounced shadow snapshots before AI prompt edits with rolling window pruning.
+  - [x] **5.3 Webview UI Revamp (`src/webview/App.tsx`)**:
+    - [x] Daily Essentials deck (Save / Push / Pull / Branch / Uncommit).
+    - [x] Interactive Virtual Timeline Tree (visual nodes with 1-click rewind).
+    - [x] Plain-English Action Preview & Confirmation modal.
+    - [x] Visual dirty file grouping overview.
+  - [x] **5.4 Automated Verification**: Vitest unit test suite covering essentials & auto-checkpoints (4 new tests passing, 20/20 total tests across all suites).
+  - [x] **5.5 Packaging Release**: Rebuild and package `gitwizard-0.2.0.vsix`.

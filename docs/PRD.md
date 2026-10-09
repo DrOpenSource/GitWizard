@@ -26,15 +26,16 @@
 ### Core Capabilities
 | Feature | User Intent | Underlying Orchestration |
 | :--- | :--- | :--- |
-| **1. Instant Checkpoint** | *"I want to test a crazy prompt without losing my current work"* | Takes low-overhead snapshot into `refs/gitwizard/snapshots/*` without moving HEAD. 1-click restore. |
-| **2. Branch & Commit Splitter** | *"AI modified 8 files; I want 4 in Branch A and 4 in Branch B"* | Visual file selector. Sequentially creates branches, commits selected files, stashes remainders, and cleans state. |
-| **3. Safe Remote Sync** | *"Pull latest changes from main without losing my local edits"* | Auto-snapshots repo, fetches remote, performs rebase/merge. If conflicts arise, automatically aborts and restores cleanly. |
-| **4. Oops, Undo (Time Machine)** | *"I just made a mistake, take me back 10 minutes"* | Visual log of recent actions and snapshots. Restores working tree cleanly with a safety backup taken prior to the undo. |
+| **1. Daily Essentials (The Calm Deck)** | *"I just want to commit, push, pull, uncommit, and branch without fear"* | Plain-English 1-click primitives (`safeCommit`, `safePush`, `safePull`, `safeUncommit`, `createBranch`). Always backed by automatic safety snapshots. |
+| **2. Auto-Checkpoint & Flight Recorder** | *"I'm vibe coding with AI; save checkpoints automatically before AI edits"* | Passive background debounced shadow snapshots (`refs/gitwizard/snapshots/auto-*`). Zero effort required from user. |
+| **3. Virtual Timeline Tree** | *"Where am I and how do I rewind to before a bad prompt?"* | Interactive retrospective tree combining commits, manual saves, and auto-saves. 1-click rewind with plain-English preview and zero data loss. |
+| **4. Visual File Organizer (Branch Splitter)** | *"AI modified 15 files; I want a clean separation between features"* | Visual categorizer. Sequentially branches, commits selected files, stashes remainders, and cleans state. |
+| **5. Plain-English Action Approvals** | *"Tell me what will happen before touching my Git repo"* | Modal explaining actions, affected files, and rollback safety guarantee before execution. |
 
 ---
 
 ## 5. Explicit Non-Goals (Out of Scope for V1)
-* **Not a Full Git GUI Replacement**: We are NOT building another GitKraken or SourceTree with complex commit DAG graphs.
+* **Not a Full Git GUI Replacement**: We are NOT building another GitKraken with complex graph DAGs.
 * **No Manual 3-Way Merge Tool**: GitWizard safely aborts conflicting merges/rebases back to the pre-transaction state rather than forcing a complex manual merge editor in V1.
 * **No Remote Hosting Management**: We do not manage GitHub PR reviews or CI pipelines.
 
@@ -43,4 +44,5 @@
 ## 6. Success Metrics & Acceptance Criteria
 * **Zero Data Loss**: In any simulated failure (process kill, non-zero git exit, dirty tree conflict), the repository must restore to 100% of its pre-transaction state.
 * **Sub-Second Checkpointing**: Taking a snapshot must complete in <300ms using native Git plumbing (`git stash create`, `git write-tree`).
+* **Vibe Coder Clarity**: 100% of actions provide plain-English previews before destructive operations, with zero technical Git jargon required for daily usage.
 * **Extension Startup Overhead**: Extension activates in <50ms without blocking editor responsiveness.

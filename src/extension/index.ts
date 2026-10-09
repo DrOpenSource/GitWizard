@@ -7,6 +7,8 @@ import { BranchSplitterWizard, SplitRequest } from '../wizards/split';
 import { SafeSyncWizard } from '../wizards/sync';
 import { UndoWizard } from '../wizards/undo';
 import { RepoSplitterWizard, SplitToNewRepoOptions } from '../wizards/publish';
+import { DailyEssentialsWizard } from '../wizards/essentials';
+import { AutoCheckpointController } from '../engine/auto-checkpoint';
 
 class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'gitwizard.sidebarView';
@@ -21,6 +23,8 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _syncWizard: SafeSyncWizard,
     private readonly _undoWizard: UndoWizard,
     private readonly _repoSplitterWizard: RepoSplitterWizard,
+    private readonly _essentialsWizard: DailyEssentialsWizard,
+    private readonly _autoCheckpoint: AutoCheckpointController,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -154,6 +158,104 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           }
           break;
         }
+
+        case 'SAFE_COMMIT': {
+          try {
+            const res = await this._essentialsWizard.safeCommit(data.message);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showWarningMessage(`GitWizard: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Save Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'SAFE_PUSH': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Pushing to remote...');
+            const res = await this._essentialsWizard.safePush(data.remote || 'origin');
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Push Error: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Push Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'SAFE_PULL': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Fetching latest updates...');
+            const res = await this._essentialsWizard.safePull(data.remote || 'origin');
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showWarningMessage(`GitWizard: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Pull Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'SAFE_UNCOMMIT': {
+          try {
+            const res = await this._essentialsWizard.safeUncommit();
+            vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Uncommit Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'CREATE_BRANCH': {
+          try {
+            const res = await this._essentialsWizard.createBranch(data.branchName);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Branch Error: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Branch Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'SWITCH_BRANCH': {
+          try {
+            const res = await this._essentialsWizard.switchBranch(data.branchName);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Switch Error: ${res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Switch Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'TRIGGER_AUTO_CHECKPOINT': {
+          try {
+            await this._autoCheckpoint.captureIfDirty(data.label || 'manual-save');
+            await this.broadcastStatus();
+          } catch (err: any) {
+            console.error('Auto checkpoint error:', err);
+          }
+          break;
+        }
       }
     });
   }
@@ -231,6 +333,8 @@ export function activate(context: vscode.ExtensionContext) {
   const syncWizard = new SafeSyncWizard(git, snapshotManager);
   const undoWizard = new UndoWizard(git, snapshotManager);
   const repoSplitterWizard = new RepoSplitterWizard(git, snapshotManager, runner);
+  const essentialsWizard = new DailyEssentialsWizard(git, snapshotManager);
+  const autoCheckpoint = new AutoCheckpointController(git, snapshotManager);
 
   // Status Bar Item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -265,11 +369,21 @@ export function activate(context: vscode.ExtensionContext) {
     syncWizard,
     undoWizard,
     repoSplitterWizard,
+    essentialsWizard,
+    autoCheckpoint,
     updateStatusBar
   );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(GitWizardSidebarProvider.viewType, provider)
+  );
+
+  // Passive Auto-Checkpoint File Watcher: captures shadow snapshots on save
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument(async () => {
+      await autoCheckpoint.scheduleAutoCheckpoint('pre-prompt-save', 2500);
+      await provider.broadcastStatus();
+    })
   );
 
   // Focus Sidebar Command

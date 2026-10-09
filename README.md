@@ -21,26 +21,24 @@ When things go wrong—such as messy working trees, accidental merge conflicts, 
 
 ## 🌟 Core Features
 
-### 1. 🛡️ Instant Safety Checkpoint
-* Capture a lightweight snapshot of your current working directory (including modified and untracked files) before prompting an AI agent.
-* Uses dedicated Git plumbing (`refs/gitwizard/snapshots/*`) without polluting your commit history or moving `HEAD`.
-* Restore anytime with a single click.
+### 1. ⚡ Daily Essentials (The Calm Git Deck)
+* **Save My Work (Commit)**: 1-click stage and commit with clear English descriptions.
+* **Send & Update (Push & Safe Pull)**: 1-click push with upstream tracking, plus conflict-shielded safe pulling that auto-aborts and restores if remote changes collide.
+* **Branch Management**: Quick branch switcher and one-click new branch creator.
+* **Undo Last Commit (Uncommit)**: Soft undo moving `HEAD` back while keeping 100% of your modified code right in your editor.
 
-### 2. ✂️ Branch & Commit Splitter
-* Did your AI pair programmer just touch 8 files across your backend and UI?
-* Select which files go to Branch A and which go to Branch B.
-* GitWizard executes an atomic transaction: stashing, creating branches, and committing files into clean, PR-ready branches.
+### 2. ⏳ Virtual Timeline Tree & Passive Flight Recorder
+* **Zero-Effort Auto-Saves**: Passively records debounced shadow snapshots before AI prompt sessions mutate code.
+* **Retrospective Time Machine**: Chronological visual tree of auto-saves, manual checkpoints, and commits.
+* **1-Click Rewind**: Instant restoration with automatic pre-restore safety backups.
 
-### 3. 🔄 Safe Remote Sync
-* Pull or rebase from upstream safely.
-* If a merge conflict occurs, GitWizard **automatically aborts the merge** and restores your working tree to your safe pre-sync snapshot. You never get stuck in a detached HEAD or broken `MERGE_HEAD` state.
+### 3. 🛡️ Plain-English Action Approvals
+* Before any non-trivial operation (Split, Rewind, Pull, Uncommit), GitWizard shows a calm preview card explaining what will happen in plain English and guarantees zero data loss.
 
-### 4. ⏪ Time Machine / Undo
-* Translates cryptic Git reflog entries into readable cards:
-  * *"Committed: 'Added auth route' "*
-  * *"Switched branch from main to feature/ui"*
-  * *"Merged branch dev"*
-* 1-click rewind to `HEAD@{1}` with an automatic safety snapshot created before the rewind.
+### 4. ✂️ Branch & Commit Splitter
+* Did your AI pair programmer just touch 10+ files across your backend and UI?
+* Select which files go to Branch A and Branch B with a visual selector.
+* Sequentially commits and creates clean, PR-ready branches.
 
 ---
 
@@ -49,7 +47,7 @@ When things go wrong—such as messy working trees, accidental merge conflicts, 
 ### Installing in VS Code / Cursor / Antigravity
 1. Open the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`).
 2. Click the `...` menu in the top-right of the Extensions panel.
-3. Select **Install from VSIX...** and choose `gitwizard-0.1.0.vsix`.
+3. Select **Install from VSIX...** and choose `gitwizard-0.3.0.vsix`.
 4. Click the **GitWizard** wand icon (`$(wand)`) in the Activity Bar or check the Status Bar!
 
 ---
