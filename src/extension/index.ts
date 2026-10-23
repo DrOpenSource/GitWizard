@@ -15,6 +15,8 @@ import { AICommitWizard } from '../wizards/ai-commit';
 import { SecretScanner, DetectedSecret } from '../pro/secret-scanner';
 import { SecretRemediationEngine } from '../pro/secret-remediation';
 import { ProductionBranchGuard } from '../pro/branch-guard';
+import { FileRewindEngine } from '../pro/file-rewind';
+import { AISplitterEngine } from '../pro/ai-splitter';
 
 class VSCodeLicenseStorage implements LicenseStorage {
   constructor(private readonly memento: vscode.Memento) {}
@@ -62,6 +64,8 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _branchGuard: ProductionBranchGuard,
     private readonly _secretScanner: SecretScanner,
     private readonly _secretRemediation: SecretRemediationEngine,
+    private readonly _fileRewind: FileRewindEngine,
+    private readonly _aiSplitter: AISplitterEngine,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -172,6 +176,53 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
             await this.broadcastStatus();
           } catch (err: any) {
             vscode.window.showErrorMessage(`GitWizard Restore Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'REWIND_FILE': {
+          try {
+            const res = await this._fileRewind.rewindFile(data.snapshotId, data.filePath);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard File Rewind Error: ${res.error || res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard File Rewind Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'PLAN_AUTO_SPLIT': {
+          try {
+            this._aiService.updateConfig(getActiveAIConfig());
+            const plan = await this._aiSplitter.planAutoSplit();
+            this._view?.webview.postMessage({
+              type: 'AUTO_SPLIT_PLAN_RESPONSE',
+              plan
+            });
+          } catch (err: any) {
+            this._view?.webview.postMessage({
+              type: 'AUTO_SPLIT_PLAN_RESPONSE',
+              plan: { success: false, groups: [], totalFiles: 0, error: err.message }
+            });
+          }
+          break;
+        }
+
+        case 'EXECUTE_AUTO_SPLIT': {
+          try {
+            const res = await this._aiSplitter.executeAutoSplit(data.groups);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: Successfully split into ${res.createdBranches.join(', ')}! ✂️`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Auto-Split Error: ${res.error}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Auto-Split Error: ${err.message}`);
           }
           break;
         }
@@ -488,6 +539,7 @@ export function activate(context: vscode.ExtensionContext) {
   const secretScanner = new SecretScanner();
   const branchGuard = new ProductionBranchGuard(git, snapshotManager);
   const secretRemediation = new SecretRemediationEngine(rootPath);
+  const fileRewind = new FileRewindEngine(git, snapshotManager);
 
   const checkpointWizard = new CheckpointWizard(git, snapshotManager);
   const splitterWizard = new BranchSplitterWizard(git, snapshotManager, runner);
@@ -502,6 +554,7 @@ export function activate(context: vscode.ExtensionContext) {
   const licenseManager = new LicenseManager(licenseStorage);
   const aiService = new AIService(getActiveAIConfig());
   const aiCommitWizard = new AICommitWizard(git, aiService, licenseManager);
+  const aiSplitter = new AISplitterEngine(git, aiService, licenseManager, splitterWizard);
 
   // Status Bar Item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -546,6 +599,8 @@ export function activate(context: vscode.ExtensionContext) {
     branchGuard,
     secretScanner,
     secretRemediation,
+    fileRewind,
+    aiSplitter,
     updateStatusBar
   );
 
@@ -761,11 +816,69 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Split Changes Command
+  // Pro: Rewind Single File Command
   context.subscriptions.push(
-    vscode.commands.registerCommand('gitwizard.splitChanges', async () => {
-      await vscode.commands.executeCommand('gitwizard.sidebarView.focus');
-      vscode.window.showInformationMessage('GitWizard: Select files in the sidebar Branch Splitter to organize branches.');
+    vscode.commands.registerCommand('gitwizard.rewindFile', async () => {
+      const snaps = await snapshotManager.listSnapshots();
+      if (snaps.length === 0) {
+        vscode.window.showInformationMessage('No GitWizard snapshots available.');
+        return;
+      }
+      const snapPick = await vscode.window.showQuickPick(
+        snaps.map(s => ({
+          label: s.label,
+          description: new Date(s.timestamp).toLocaleTimeString(),
+          id: s.id
+        })),
+        { placeHolder: 'Select snapshot to rewind a file from:' }
+      );
+      if (!snapPick) return;
+
+      const filePath = await vscode.window.showInputBox({
+        prompt: 'Enter relative path of file to rewind (e.g. src/utils/helpers.ts):'
+      });
+      if (!filePath) return;
+
+      const res = await fileRewind.rewindFile(snapPick.id, filePath.trim());
+      if (res.success) {
+        vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+        provider.broadcastStatus();
+      } else {
+        vscode.window.showErrorMessage(`GitWizard: ${res.error || res.message}`);
+      }
+    })
+  );
+
+  // Pro: Auto-Split with AI Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.autoSplit', async () => {
+      aiService.updateConfig(getActiveAIConfig());
+      const plan = await aiSplitter.planAutoSplit();
+      if (!plan.success) {
+        if (plan.requiresPro) {
+          const activate = await vscode.window.showWarningMessage(plan.error || 'Pro license required', 'Activate License');
+          if (activate === 'Activate License') {
+            await vscode.commands.executeCommand('gitwizard.activateLicense');
+          }
+        } else {
+          vscode.window.showErrorMessage(`GitWizard Auto-Split: ${plan.error}`);
+        }
+        return;
+      }
+      const confirm = await vscode.window.showInformationMessage(
+        `AI Auto-Split created ${plan.groups.length} branches across ${plan.totalFiles} files. Execute?`,
+        'Execute Split',
+        'Cancel'
+      );
+      if (confirm === 'Execute Split') {
+        const res = await aiSplitter.executeAutoSplit(plan.groups);
+        if (res.success) {
+          vscode.window.showInformationMessage(`GitWizard: Auto-split completed into: ${res.createdBranches.join(', ')}`);
+          provider.broadcastStatus();
+        } else {
+          vscode.window.showErrorMessage(`GitWizard Auto-Split: ${res.error}`);
+        }
+      }
     })
   );
 

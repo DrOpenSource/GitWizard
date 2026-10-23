@@ -93,6 +93,19 @@ export const App: React.FC = () => {
     message: string;
   } | null>(null);
 
+  // Sprint 9: Surgical File Rewind & AI Semantic Auto-Split
+  const [isSplittingAI, setIsSplittingAI] = useState(false);
+  const [aiSplitPlan, setAiSplitPlan] = useState<{
+    groups: Array<{ branch: string; commitMessage: string; rationale: string; files: string[] }>;
+    totalFiles: number;
+    requiresPro?: boolean;
+    error?: string;
+  } | null>(null);
+  const [fileRewindTarget, setFileRewindTarget] = useState<{
+    snapshot: SnapshotMetadata;
+    selectedFile: string;
+  } | null>(null);
+
   // Everyday state
   const [commitMessage, setCommitMessage] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
@@ -141,6 +154,26 @@ export const App: React.FC = () => {
           setAiError(data.error || 'Pro license or active trial required.');
         } else {
           setAiError(data.error || 'Failed to generate commit message.');
+        }
+      } else if (data.type === 'AUTO_SPLIT_PLAN_RESPONSE') {
+        setIsSplittingAI(false);
+        const plan = data.plan;
+        if (plan?.requiresPro) {
+          setShowLicenseModal(true);
+          setAiError(plan.error || 'Pro license or active trial required.');
+        } else if (plan?.success && plan.groups?.length) {
+          setAiSplitPlan(plan);
+          if (plan.groups.length >= 2) {
+            setBranchA(plan.groups[0].branch);
+            setCommitA(plan.groups[0].commitMessage);
+            const selA: Record<string, boolean> = {};
+            plan.groups[0].files.forEach((f: string) => { selA[f] = true; });
+            setSelectedForA(selA);
+            setBranchB(plan.groups[1].branch);
+            setCommitB(plan.groups[1].commitMessage);
+          }
+        } else {
+          setAiError(plan?.error || 'Failed to auto-split dirty files.');
         }
       } else if (data.type === 'SECRET_RADAR_TRIGGERED') {
         setSecretRadarAlert({
@@ -221,6 +254,49 @@ export const App: React.FC = () => {
       allowProtected: true
     });
     setBranchGuardAlert(null);
+  };
+
+  // Sprint 9 Pro Handlers
+  const handleAutoSplitAI = () => {
+    setIsSplittingAI(true);
+    setAiError(null);
+    vscode.postMessage({ type: 'PLAN_AUTO_SPLIT' });
+  };
+
+  const handleExecuteAutoSplitPlan = () => {
+    if (!aiSplitPlan || !aiSplitPlan.groups || aiSplitPlan.groups.length === 0) return;
+    setConfirmModal({
+      title: '✂️ Execute AI Multi-Branch Split',
+      description: `GitWizard will create ${aiSplitPlan.groups.length} branches and commit the files cleanly into each one:`,
+      consequences: aiSplitPlan.groups.map(g => `Branch "${g.branch}": ${g.files.length} file(s) - "${g.commitMessage}"`),
+      confirmButtonText: 'Yes, Execute AI Split',
+      onConfirm: () => {
+        vscode.postMessage({
+          type: 'EXECUTE_AUTO_SPLIT',
+          groups: aiSplitPlan.groups
+        });
+        setAiSplitPlan(null);
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  const handleTriggerFileRewind = (snap: SnapshotMetadata) => {
+    setFileRewindTarget({
+      snapshot: snap,
+      selectedFile: allDirtyFiles[0] || ''
+    });
+  };
+
+  const handleConfirmFileRewind = () => {
+    if (!fileRewindTarget || !fileRewindTarget.selectedFile.trim()) return;
+    const { snapshot, selectedFile } = fileRewindTarget;
+    vscode.postMessage({
+      type: 'REWIND_FILE',
+      snapshotId: snapshot.id,
+      filePath: selectedFile.trim()
+    });
+    setFileRewindTarget(null);
   };
 
   // Plain-English Handlers
@@ -491,6 +567,140 @@ export const App: React.FC = () => {
                 }}
               >
                 {confirmModal.confirmButtonText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Surgical Single-File Rewind Modal */}
+      {fileRewindTarget && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10002,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #3b82f6',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '380px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(59, 130, 246, 0.35)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>📄</span> Rewind Single File
+              </div>
+              <button
+                onClick={() => setFileRewindTarget(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--vscode-foreground)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  opacity: 0.7
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
+              Restore an individual file from snapshot <code>{fileRewindTarget.snapshot.label}</code>. All your other modified files remain 100% untouched.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600 }}>File Path to Rewind:</div>
+              <input
+                type="text"
+                placeholder="e.g. src/index.ts or package.json"
+                value={fileRewindTarget.selectedFile}
+                onChange={(e) => setFileRewindTarget({ ...fileRewindTarget, selectedFile: e.target.value })}
+                style={{
+                  padding: '7px 8px',
+                  background: 'var(--vscode-input-background)',
+                  color: 'var(--vscode-input-foreground)',
+                  border: '1px solid var(--vscode-input-border)',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace'
+                }}
+              />
+              {allDirtyFiles.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '10px', opacity: 0.7, marginBottom: '4px' }}>Quick select from modified files:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '80px', overflowY: 'auto' }}>
+                    {allDirtyFiles.map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setFileRewindTarget({ ...fileRewindTarget, selectedFile: f })}
+                        style={{
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          background: fileRewindTarget.selectedFile === f ? 'var(--vscode-button-background)' : 'rgba(255,255,255,0.05)',
+                          color: fileRewindTarget.selectedFile === f ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
+                          cursor: 'pointer',
+                          fontFamily: 'monospace'
+                        }}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button
+                onClick={() => setFileRewindTarget(null)}
+                style={{
+                  padding: '5px 10px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmFileRewind}
+                disabled={!fileRewindTarget.selectedFile.trim()}
+                style={{
+                  padding: '6px 12px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: !fileRewindTarget.selectedFile.trim() ? 'not-allowed' : 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ⏮️ Rewind This File
               </button>
             </div>
           </div>
@@ -1310,21 +1520,39 @@ export const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleAskRestoreSnapshot(snap)}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: '11px',
-                        background: 'var(--vscode-button-background)',
-                        color: 'var(--vscode-button-foreground)',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        fontWeight: 500
-                      }}
-                    >
-                      ⏪ Rewind
-                    </button>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button
+                        onClick={() => handleAskRestoreSnapshot(snap)}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          background: 'var(--vscode-button-background)',
+                          color: 'var(--vscode-button-foreground)',
+                          border: 'none',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          fontWeight: 500
+                        }}
+                      >
+                        ⏪ All
+                      </button>
+                      <button
+                        onClick={() => handleTriggerFileRewind(snap)}
+                        title="Rewind only one specific file from this snapshot"
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          background: 'rgba(255,255,255,0.08)',
+                          color: 'var(--vscode-foreground)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          fontWeight: 500
+                        }}
+                      >
+                        📄 1 File...
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -1362,8 +1590,95 @@ export const App: React.FC = () => {
       {activeTab === 'split' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <p style={{ margin: 0, fontSize: '11px', opacity: 0.85 }}>
-            AI modified multiple files at once? Divide them cleanly into two separate feature branches.
+            AI modified multiple files at once? Divide them cleanly into separate feature branches.
           </p>
+
+          {/* Pro AI Auto-Split Card */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.12) 100%)',
+              border: '1px solid rgba(99,102,241,0.3)',
+              borderRadius: '6px',
+              padding: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '12px', color: '#c7d2fe', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>✨</span> AI Semantic Multi-Branch Auto-Split
+              </div>
+              <span style={{ fontSize: '9px', background: 'rgba(99,102,241,0.25)', color: '#a5b4fc', padding: '1px 6px', borderRadius: '8px', fontWeight: 600 }}>PRO</span>
+            </div>
+            <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: '1.3' }}>
+              Automatically cluster {allDirtyFiles.length} modified files into isolated PR branches with semantic commit messages.
+            </div>
+
+            <button
+              onClick={handleAutoSplitAI}
+              disabled={isSplittingAI || allDirtyFiles.length < 2}
+              style={{
+                padding: '7px 10px',
+                background: isSplittingAI ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: isSplittingAI || allDirtyFiles.length < 2 ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(99,102,241,0.25)'
+              }}
+            >
+              {isSplittingAI ? '⏳ Analyzing file semantics...' : '✨ Auto-Split into PRs (1-Click)'}
+            </button>
+
+            {aiSplitPlan && aiSplitPlan.groups && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 600, color: '#a5b4fc' }}>
+                  🎯 AI Proposed {aiSplitPlan.groups.length} Branches:
+                </div>
+                {aiSplitPlan.groups.map((g, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: 'rgba(0, 0, 0, 0.25)',
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      borderLeft: '2px solid #818cf8'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, color: '#e0e7ff' }}>🌿 {g.branch}</div>
+                    <div style={{ opacity: 0.8, fontSize: '10px' }}>💬 {g.commitMessage}</div>
+                    <div style={{ opacity: 0.6, fontSize: '9px', marginTop: '2px' }}>
+                      Files ({g.files.length}): {g.files.join(', ')}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={handleExecuteAutoSplitPlan}
+                  style={{
+                    padding: '6px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    marginTop: '2px'
+                  }}
+                >
+                  🚀 Execute AI Multi-Branch Split Now
+                </button>
+              </div>
+            )}
+          </div>
 
           {allDirtyFiles.length < 2 ? (
             <div style={{ fontSize: '11px', opacity: 0.7, padding: '12px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>

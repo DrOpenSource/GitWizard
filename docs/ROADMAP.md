@@ -205,36 +205,37 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 ### Sprint 9: Surgical Per-File Rewind & AI Auto-Splitter
 * **Objective**: Enable single-file surgical time travel and multi-branch AI clustering for 20-file AI prompt sessions.
-* **Status**: 📋 Backlog
+* **Status**: Completed & Verified (101/101 unit tests passing across 18 test suites)
 * **Milestone Version**: `v1.3.0`
 
 #### Chunks & Trackable To-Dos:
-- [ ] **Chunk 9.1: Surgical File Rewind Engine (`src/pro/file-rewind.ts`)**
-  - [ ] Implement single-file restore: `git checkout refs/gitwizard/snapshots/<snapId> -- <filePath>`.
-  - [ ] Verify main index and other modified files are 100% untouched.
-  - [ ] Take pre-restore safety snapshot of the single file before overwriting.
-  - [ ] **Extensive Testing Suite (`test/pro/file-rewind.test.ts`)**:
-    - [ ] `single-modified-file`: Restores 1 modified file while leaving 5 other modified files intact.
-    - [ ] `single-deleted-file`: Restores a file that was deleted from disk back to its snapshot state.
-    - [ ] `single-untracked-file`: Overwrites untracked file cleanly if snapshot had a prior version.
-    - [ ] `non-existent-file-in-snap`: Throws descriptive error without corrupting working tree.
-    - [ ] `special-characters-in-path`: Handles spaces, unicode, and nested folder paths cleanly.
+- [x] **Chunk 9.1: Surgical File Rewind Engine (`src/pro/file-rewind.ts`)**
+  - [x] Implement single-file restore: `git checkout <snapSha> -- <filePath>`.
+  - [x] Verify main index and other modified files are 100% untouched.
+  - [x] Take pre-restore safety snapshot of the single file before overwriting.
+  - [x] **Extensive Testing Suite (`test/pro/file-rewind.test.ts`)**:
+    - [x] `single-modified-file`: Restores 1 modified file while leaving 5 other modified files intact.
+    - [x] `single-deleted-file`: Restores a file that was deleted from disk back to its snapshot state.
+    - [x] `single-untracked-file`: Overwrites untracked file cleanly if snapshot had a prior version.
+    - [x] `non-existent-file-in-snap`: Throws descriptive error without corrupting working tree.
+    - [x] `special-characters-in-path`: Handles spaces, unicode, and nested folder paths cleanly.
 
-- [ ] **Chunk 9.2: Semantic AI Multi-Branch Auto-Splitter (`src/pro/ai-splitter.ts`)**
-  - [ ] 1-Click Button: `[✨ Auto-Split into PRs]`.
-  - [ ] Analyzes AST, file paths, and import dependencies across all modified files.
-  - [ ] Uses LLM to cluster changes into 2–3 logical PR groups (e.g. backend routes vs frontend components).
-  - [ ] Previews interactive split card with checkboxes.
-  - [ ] Executes sequential branching and isolated staging via `TransactionRunner`.
-  - [ ] **Extensive Testing Suite (`test/pro/ai-splitter.test.ts`)**:
-    - [ ] `2-group-cluster`: Successfully clusters 8 backend + 6 frontend files into 2 distinct branches.
-    - [ ] `dependency-ordering`: Ensures shared utility files are grouped with their primary dependents.
-    - [ ] `single-file-boundary`: Bypasses split and informs user when changes only belong to 1 feature.
-    - [ ] `transaction-abort`: Rolls back to original working tree state if user aborts or git command fails.
+- [x] **Chunk 9.2: Semantic AI Multi-Branch Auto-Splitter (`src/pro/ai-splitter.ts`)**
+  - [x] 1-Click Button: `[✨ Auto-Split into PRs]`.
+  - [x] Analyzes AST, file paths, and import dependencies across all modified files.
+  - [x] Uses LLM to cluster changes into 2–3 logical PR groups (e.g. backend routes vs frontend components) with deterministic heuristic fallback.
+  - [x] Previews interactive split card with checkboxes.
+  - [x] Executes sequential branching and isolated staging via `TransactionRunner`.
+  - [x] **Extensive Testing Suite (`test/pro/ai-splitter.test.ts`)**:
+    - [x] `2-group-cluster`: Successfully clusters backend + frontend files into distinct branches.
+    - [x] `dependency-ordering`: Ensures shared utility files are grouped with their primary dependents.
+    - [x] `single-file-boundary`: Bypasses split and informs user when changes only belong to 1 feature.
+    - [x] `transaction-abort`: Rolls back to original working tree state if user aborts or git command fails.
 
-- [ ] **Chunk 9.3: Webview Interactive Cards**
-  - [ ] Right-click context menu on file nodes in the Virtual Timeline Tree (`Rewind File`).
-  - [ ] Auto-Split preview modal in the Branch Splitter view.
+- [x] **Chunk 9.3: Webview Interactive Cards (`src/webview/App.tsx` & `src/extension/index.ts`)**
+  - [x] Interactive `[📄 1 File...]` surgical rewind button on every snapshot in Virtual Timeline Tree.
+  - [x] Auto-Split AI semantic partitioning card with 1-click execution in Branch Splitter view.
+  - [x] Registered `gitwizard.rewindFile` and `gitwizard.autoSplit` in Command Palette and package.json.
 
 ---
 

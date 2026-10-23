@@ -108,6 +108,16 @@
         "command": "gitwizard.configureAI",
         "title": "GitWizard Pro: Configure AI Provider & Key",
         "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.autoSplit",
+        "title": "GitWizard Pro: Auto-Split Changes into PRs",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.rewindFile",
+        "title": "GitWizard Pro: Surgically Rewind 1 File",
+        "category": "GitWizard"
       }
     ],
     "configuration": {
