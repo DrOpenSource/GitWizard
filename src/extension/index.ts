@@ -17,6 +17,8 @@ import { SecretRemediationEngine } from '../pro/secret-remediation';
 import { ProductionBranchGuard } from '../pro/branch-guard';
 import { FileRewindEngine } from '../pro/file-rewind';
 import { AISplitterEngine } from '../pro/ai-splitter';
+import { ConflictResolverEngine, ConflictResolution } from '../pro/conflict-resolver';
+import { CloudSyncEngine } from '../pro/cloud-sync';
 
 class VSCodeLicenseStorage implements LicenseStorage {
   constructor(private readonly memento: vscode.Memento) {}
@@ -66,6 +68,8 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _secretRemediation: SecretRemediationEngine,
     private readonly _fileRewind: FileRewindEngine,
     private readonly _aiSplitter: AISplitterEngine,
+    private readonly _conflictResolver: ConflictResolverEngine,
+    private readonly _cloudSync: CloudSyncEngine,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -239,6 +243,97 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
             await this.broadcastStatus();
           } catch (err: any) {
             vscode.window.showErrorMessage(`GitWizard Split Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'ANALYZE_CONFLICTS': {
+          try {
+            const analysis = await this._conflictResolver.analyzeConflicts();
+            this._view?.webview.postMessage({
+              type: 'CONFLICT_ANALYSIS_RESPONSE',
+              analysis
+            });
+          } catch (err: any) {
+            this._view?.webview.postMessage({
+              type: 'CONFLICT_ANALYSIS_RESPONSE',
+              analysis: { hasConflicts: false, inMerge: false, inRebase: false, files: [], error: err.message }
+            });
+          }
+          break;
+        }
+
+        case 'RESOLVE_CONFLICT_AI': {
+          try {
+            this._aiService.updateConfig(getActiveAIConfig());
+            const resolution = await this._conflictResolver.resolveConflictForFile(data.filePath, data.customInstruction);
+            this._view?.webview.postMessage({
+              type: 'FILE_CONFLICT_RESOLVED',
+              resolution
+            });
+          } catch (err: any) {
+            this._view?.webview.postMessage({
+              type: 'FILE_CONFLICT_RESOLVED',
+              resolution: null,
+              error: err.message
+            });
+          }
+          break;
+        }
+
+        case 'APPLY_CONFLICT_RESOLUTIONS': {
+          try {
+            const res = await this._conflictResolver.applyResolutions(data.resolutions);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: Resolved conflicts in ${res.resolvedFiles.join(', ')}! 🛡️`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Conflict Error: ${res.error}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Conflict Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'ABORT_CONFLICT': {
+          try {
+            const res = await this._conflictResolver.abortConflict();
+            vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Abort Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'PUSH_CLOUD_SYNC': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Encrypting and pushing snapshots to remote...');
+            const res = await this._cloudSync.pushToCloud({ remote: data.remote || 'origin', passphrase: data.passphrase });
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Cloud Sync Error: ${res.message}`);
+            }
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Cloud Sync Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'PULL_CLOUD_SYNC': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Pulling and decrypting cloud snapshots...');
+            const res = await this._cloudSync.pullFromCloud({ remote: data.remote || 'origin', passphrase: data.passphrase });
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+              await this.broadcastStatus();
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Cloud Sync Error: ${res.message}`);
+            }
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Cloud Sync Error: ${err.message}`);
           }
           break;
         }
@@ -555,6 +650,8 @@ export function activate(context: vscode.ExtensionContext) {
   const aiService = new AIService(getActiveAIConfig());
   const aiCommitWizard = new AICommitWizard(git, aiService, licenseManager);
   const aiSplitter = new AISplitterEngine(git, aiService, licenseManager, splitterWizard);
+  const conflictResolver = new ConflictResolverEngine(git, snapshotManager, licenseManager, aiService);
+  const cloudSync = new CloudSyncEngine(git, snapshotManager, licenseManager);
 
   // Status Bar Item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -601,6 +698,8 @@ export function activate(context: vscode.ExtensionContext) {
     secretRemediation,
     fileRewind,
     aiSplitter,
+    conflictResolver,
+    cloudSync,
     updateStatusBar
   );
 
@@ -878,6 +977,71 @@ export function activate(context: vscode.ExtensionContext) {
         } else {
           vscode.window.showErrorMessage(`GitWizard Auto-Split: ${res.error}`);
         }
+      }
+    })
+  );
+
+  // Pro: AI Merge Conflict Resolver Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.resolveConflicts', async () => {
+      const analysis = await conflictResolver.analyzeConflicts();
+      if (!analysis.hasConflicts || analysis.files.length === 0) {
+        vscode.window.showInformationMessage('GitWizard: No active merge conflicts detected in your repository.');
+        return;
+      }
+      const filePick = await vscode.window.showQuickPick(
+        analysis.files.map(f => ({
+          label: f.filePath,
+          description: `${f.conflictBlocksCount} conflict blocks`,
+          file: f
+        })),
+        { placeHolder: 'Select conflicted file to resolve with AI:' }
+      );
+      if (!filePick) return;
+
+      vscode.window.showInformationMessage(`GitWizard: Synthesizing AI resolution for ${filePick.label}...`);
+      try {
+        aiService.updateConfig(getActiveAIConfig());
+        const resolution = await conflictResolver.resolveConflictForFile(filePick.label);
+        const confirm = await vscode.window.showInformationMessage(
+          `AI Resolution ready: ${resolution.rationale}. Apply and stage?`,
+          'Apply Resolution',
+          'Cancel'
+        );
+        if (confirm === 'Apply Resolution') {
+          await conflictResolver.applyResolutions([resolution]);
+          vscode.window.showInformationMessage(`GitWizard: Resolved and staged ${filePick.label}! 🛡️`);
+          provider.broadcastStatus();
+        }
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`GitWizard Conflict Error: ${err.message}`);
+      }
+    })
+  );
+
+  // Pro: Push Encrypted Snapshots to Remote Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.cloudPush', async () => {
+      vscode.window.showInformationMessage('GitWizard: Encrypting and pushing snapshots to remote...');
+      const res = await cloudSync.pushToCloud();
+      if (res.success) {
+        vscode.window.showInformationMessage(res.message);
+      } else {
+        vscode.window.showErrorMessage(`GitWizard Cloud Sync: ${res.message}`);
+      }
+    })
+  );
+
+  // Pro: Pull Encrypted Snapshots from Remote Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.cloudPull', async () => {
+      vscode.window.showInformationMessage('GitWizard: Pulling and decrypting snapshots from remote...');
+      const res = await cloudSync.pullFromCloud();
+      if (res.success) {
+        vscode.window.showInformationMessage(res.message);
+        provider.broadcastStatus();
+      } else {
+        vscode.window.showErrorMessage(`GitWizard Cloud Sync: ${res.message}`);
       }
     })
   );

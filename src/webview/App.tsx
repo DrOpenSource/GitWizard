@@ -106,6 +106,18 @@ export const App: React.FC = () => {
     selectedFile: string;
   } | null>(null);
 
+  // Sprint 10: Smart AI Conflict Resolver & Cloud Sync
+  const [isResolvingConflict, setIsResolvingConflict] = useState(false);
+  const [activeConflictResolution, setActiveConflictResolution] = useState<{
+    filePath: string;
+    resolvedContent: string;
+    rationale: string;
+    resolutionSource: 'ai' | 'heuristic';
+    syntaxValid: boolean;
+  } | null>(null);
+  const [cloudSyncPassphrase, setCloudSyncPassphrase] = useState('');
+  const [showCloudSyncModal, setShowCloudSyncModal] = useState(false);
+
   // Everyday state
   const [commitMessage, setCommitMessage] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
@@ -174,6 +186,13 @@ export const App: React.FC = () => {
           }
         } else {
           setAiError(plan?.error || 'Failed to auto-split dirty files.');
+        }
+      } else if (data.type === 'FILE_CONFLICT_RESOLVED') {
+        setIsResolvingConflict(false);
+        if (data.resolution) {
+          setActiveConflictResolution(data.resolution);
+        } else if (data.error) {
+          setAiError(data.error);
         }
       } else if (data.type === 'SECRET_RADAR_TRIGGERED') {
         setSecretRadarAlert({
@@ -297,6 +316,49 @@ export const App: React.FC = () => {
       filePath: selectedFile.trim()
     });
     setFileRewindTarget(null);
+  };
+
+  // Sprint 10 Pro Handlers: Conflict Resolution & Cloud Sync
+  const handleTriggerConflictResolution = () => {
+    if (!status?.conflicted || status.conflicted.length === 0) return;
+    setIsResolvingConflict(true);
+    setAiError(null);
+    vscode.postMessage({
+      type: 'RESOLVE_CONFLICT_AI',
+      filePath: status.conflicted[0]
+    });
+  };
+
+  const handleApplyConflictResolution = () => {
+    if (!activeConflictResolution) return;
+    vscode.postMessage({
+      type: 'APPLY_CONFLICT_RESOLUTIONS',
+      resolutions: [activeConflictResolution]
+    });
+    setActiveConflictResolution(null);
+  };
+
+  const handleAbortConflict = () => {
+    vscode.postMessage({ type: 'ABORT_CONFLICT' });
+    setActiveConflictResolution(null);
+  };
+
+  const handleCloudPush = () => {
+    vscode.postMessage({
+      type: 'PUSH_CLOUD_SYNC',
+      remote: 'origin',
+      passphrase: cloudSyncPassphrase.trim() || undefined
+    });
+    setShowCloudSyncModal(false);
+  };
+
+  const handleCloudPull = () => {
+    vscode.postMessage({
+      type: 'PULL_CLOUD_SYNC',
+      remote: 'origin',
+      passphrase: cloudSyncPassphrase.trim() || undefined
+    });
+    setShowCloudSyncModal(false);
   };
 
   // Plain-English Handlers
@@ -701,6 +763,238 @@ export const App: React.FC = () => {
                 }}
               >
                 ⏮️ Rewind This File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Merge Conflict Resolution Preview Modal */}
+      {activeConflictResolution && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10003,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #10b981',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '440px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(16, 185, 129, 0.35)',
+              maxHeight: '85vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', color: '#34d399' }}>
+                <span>🛡️</span> AI Conflict Resolution Ready
+              </div>
+              <button
+                onClick={() => setActiveConflictResolution(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--vscode-foreground)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  opacity: 0.7
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.9 }}>
+              File: <code style={{ color: '#a5b4fc', fontWeight: 600 }}>{activeConflictResolution.filePath}</code>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: '6px',
+                padding: '8px 10px',
+                fontSize: '11px',
+                lineHeight: '1.4'
+              }}
+            >
+              💡 <b>Synthesis Rationale</b>: {activeConflictResolution.rationale}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, opacity: 0.7 }}>Resolved Code Preview (0 conflict markers):</div>
+              <pre
+                style={{
+                  background: 'rgba(0, 0, 0, 0.4)',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all'
+                }}
+              >
+                {activeConflictResolution.resolvedContent}
+              </pre>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button
+                onClick={() => setActiveConflictResolution(null)}
+                style={{
+                  padding: '6px 12px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Discard
+              </button>
+              <button
+                onClick={handleApplyConflictResolution}
+                style={{
+                  padding: '6px 14px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
+                }}
+              >
+                ✅ Accept Resolution & Stage File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud Sync Encryption Key Modal */}
+      {showCloudSyncModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10004,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #3b82f6',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '360px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(59, 130, 246, 0.35)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', color: '#93c5fd' }}>
+                <span>☁️</span> Private GitHub Cloud Sync
+              </div>
+              <button
+                onClick={() => setShowCloudSyncModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--vscode-foreground)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  opacity: 0.7
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: '1.4' }}>
+              AES-256-GCM encrypted snapshots synced directly to your repository's <code>refs/gitwizard/cloud-sync</code>.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600 }}>Sync Passphrase (optional):</div>
+              <input
+                type="password"
+                placeholder="Leave blank for auto-derived key"
+                value={cloudSyncPassphrase}
+                onChange={(e) => setCloudSyncPassphrase(e.target.value)}
+                style={{
+                  padding: '6px 8px',
+                  background: 'var(--vscode-input-background)',
+                  color: 'var(--vscode-input-foreground)',
+                  border: '1px solid var(--vscode-input-border)',
+                  borderRadius: '4px',
+                  fontSize: '11px'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button
+                onClick={handleCloudPull}
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: 'var(--vscode-foreground)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ⬇️ Pull from Remote
+              </button>
+              <button
+                onClick={handleCloudPush}
+                style={{
+                  padding: '6px 12px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                ☁️ Push Encrypted Backup
               </button>
             </div>
           </div>
@@ -1202,6 +1496,73 @@ export const App: React.FC = () => {
         </div>
       </div>
 
+      {/* Active Merge Conflicts Banner */}
+      {status?.conflicted && status.conflicted.length > 0 && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.15) 100%)',
+            border: '1px solid #ef4444',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: '#f87171', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>⚔️</span> {status.conflicted.length} Merge Conflict{status.conflicted.length > 1 ? 's' : ''} Active
+            </div>
+            <span style={{ fontSize: '9px', background: 'rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '1px 6px', borderRadius: '8px', fontWeight: 600 }}>PRO AI</span>
+          </div>
+
+          <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
+            GitWizard can synthesize non-destructive code resolutions for all {status.conflicted.length} conflicted file(s) with 0 lost code.
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              onClick={handleTriggerConflictResolution}
+              disabled={isResolvingConflict}
+              style={{
+                flex: 1,
+                padding: '7px 10px',
+                background: isResolvingConflict ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                fontWeight: 600,
+                fontSize: '11px',
+                cursor: isResolvingConflict ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(239,68,68,0.3)'
+              }}
+            >
+              {isResolvingConflict ? '⏳ AI synthesizing...' : '✨ Auto-Resolve with AI (1-Click)'}
+            </button>
+            <button
+              onClick={handleAbortConflict}
+              title="Abort merge/rebase and roll back cleanly"
+              style={{
+                padding: '7px 10px',
+                background: 'rgba(255,255,255,0.08)',
+                color: 'var(--vscode-foreground)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: 500
+              }}
+            >
+              ↩️ Abort Merge
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
         {[
@@ -1557,6 +1918,48 @@ export const App: React.FC = () => {
                 );
               })
             )}
+
+            {/* Section: Private GitHub Cloud Sync */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(37, 99, 235, 0.08) 100%)',
+                padding: '10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                marginTop: '4px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontWeight: 600, fontSize: '11px', color: '#93c5fd', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>☁️</span> Private GitHub Cloud Sync
+                </div>
+                <span style={{ fontSize: '9px', background: 'rgba(59, 130, 246, 0.25)', color: '#93c5fd', padding: '1px 6px', borderRadius: '8px', fontWeight: 600 }}>PRO</span>
+              </div>
+              <div style={{ fontSize: '10px', opacity: 0.8, lineHeight: '1.3' }}>
+                Client-side AES-256 encrypted snapshot backup stored on your own repository. Zero third-party servers.
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={() => setShowCloudSyncModal(true)}
+                  style={{
+                    flex: 1,
+                    padding: '5px 8px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ☁️ Sync / Backup to Remote
+                </button>
+              </div>
+            </div>
 
             {/* Recent Git Reflog Actions */}
             {actions.length > 0 && (

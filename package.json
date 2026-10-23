@@ -2,7 +2,7 @@
   "name": "gitwizard",
   "displayName": "GitWizard",
   "description": "Intent-based Git safety and orchestration extension for vibe coders",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "icon": "assets/icon.png",
   "publisher": "dr-opensource",
   "engines": {
@@ -117,6 +117,21 @@
       {
         "command": "gitwizard.rewindFile",
         "title": "GitWizard Pro: Surgically Rewind 1 File",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.resolveConflicts",
+        "title": "GitWizard Pro: AI Merge Conflict Resolver",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.cloudPush",
+        "title": "GitWizard Pro: Push Encrypted Snapshots to Remote",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.cloudPull",
+        "title": "GitWizard Pro: Pull Encrypted Snapshots from Remote",
         "category": "GitWizard"
       }
     ],

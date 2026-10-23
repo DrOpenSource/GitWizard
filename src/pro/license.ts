@@ -159,6 +159,13 @@ export class LicenseManager {
   }
 
   /**
+   * Helper check returning true if lifetime license or trial is currently active.
+   */
+  isPro(now: number = Date.now()): boolean {
+    return this.getStatus(now).isPro;
+  }
+
+  /**
    * Retrieves current status (evaluates active license, active trial, or expired trial).
    */
   getStatus(now: number = Date.now()): LicenseStatus {
