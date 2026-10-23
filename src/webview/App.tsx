@@ -50,6 +50,16 @@ export interface LicenseStatus {
   reason?: string;
 }
 
+export interface DetectedSecret {
+  ruleId: string;
+  ruleName: string;
+  file: string;
+  line: number;
+  rawSecret: string;
+  maskedSecret: string;
+  entropy?: number;
+}
+
 interface ConfirmModalData {
   title: string;
   description: string;
@@ -72,6 +82,16 @@ export const App: React.FC = () => {
   const [showLicenseModal, setShowLicenseModal] = useState(false);
   const [licenseKeyInput, setLicenseKeyInput] = useState('');
   const [licenseFeedback, setLicenseFeedback] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  // Sprint 8: Secret Radar & Branch Guard Alerts
+  const [secretRadarAlert, setSecretRadarAlert] = useState<{
+    secrets: DetectedSecret[];
+    message: string;
+  } | null>(null);
+  const [branchGuardAlert, setBranchGuardAlert] = useState<{
+    suggestedFeatureBranch: string;
+    message: string;
+  } | null>(null);
 
   // Everyday state
   const [commitMessage, setCommitMessage] = useState('');
@@ -122,6 +142,20 @@ export const App: React.FC = () => {
         } else {
           setAiError(data.error || 'Failed to generate commit message.');
         }
+      } else if (data.type === 'SECRET_RADAR_TRIGGERED') {
+        setSecretRadarAlert({
+          secrets: data.secrets || [],
+          message: data.message
+        });
+      } else if (data.type === 'BRANCH_GUARD_TRIGGERED') {
+        setBranchGuardAlert({
+          suggestedFeatureBranch: data.suggestedFeatureBranch || 'feature/updates',
+          message: data.message
+        });
+      } else if (data.type === 'SECRETS_REMEDIATED') {
+        setSecretRadarAlert(null);
+      } else if (data.type === 'BRANCH_RELOCATED') {
+        setBranchGuardAlert(null);
       }
     };
 
@@ -153,6 +187,40 @@ export const App: React.FC = () => {
     setTimeout(() => {
       vscode.postMessage({ type: 'GET_PRO_STATUS' });
     }, 500);
+  };
+
+  const handleRemediateSecrets = () => {
+    if (!secretRadarAlert) return;
+    vscode.postMessage({
+      type: 'REMEDIATE_SECRETS',
+      secrets: secretRadarAlert.secrets
+    });
+  };
+
+  const handleOverrideSecretCommit = () => {
+    vscode.postMessage({
+      type: 'SAFE_COMMIT',
+      message: commitMessage.trim(),
+      ignoreSecrets: true
+    });
+    setSecretRadarAlert(null);
+  };
+
+  const handleRelocateBranch = () => {
+    if (!branchGuardAlert) return;
+    vscode.postMessage({
+      type: 'RELOCATE_BRANCH',
+      newBranch: branchGuardAlert.suggestedFeatureBranch
+    });
+  };
+
+  const handleOverrideBranchCommit = () => {
+    vscode.postMessage({
+      type: 'SAFE_COMMIT',
+      message: commitMessage.trim(),
+      allowProtected: true
+    });
+    setBranchGuardAlert(null);
   };
 
   // Plain-English Handlers
@@ -569,6 +637,232 @@ export const App: React.FC = () => {
               >
                 Activate Key
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Secret Radar Alert Modal */}
+      {secretRadarAlert && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #ef4444',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '380px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(239, 68, 68, 0.35)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 700, fontSize: '13px' }}>
+              <span>🚨</span> Pre-Flight Secret Radar Alert
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
+              GitWizard detected {secretRadarAlert.secrets.length} sensitive credential(s) in your changes that would be committed:
+            </div>
+
+            <div
+              style={{
+                maxHeight: '140px',
+                overflowY: 'auto',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: '6px',
+                padding: '8px 10px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                fontSize: '11px'
+              }}
+            >
+              {secretRadarAlert.secrets.map((s, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                    <span style={{ fontWeight: 600 }}>{s.file}:{s.line}</span>
+                    <span style={{ opacity: 0.7, marginLeft: '4px' }}>({s.ruleName})</span>
+                  </div>
+                  <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: '3px', color: '#fca5a5' }}>
+                    {s.maskedSecret}
+                  </code>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+              <button
+                onClick={handleRemediateSecrets}
+                style={{
+                  padding: '8px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
+                }}
+              >
+                🔒 Extract to .env & Add to .gitignore (1-Click)
+              </button>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <button
+                  onClick={() => setSecretRadarAlert(null)}
+                  style={{
+                    padding: '5px 10px',
+                    background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                    color: 'var(--vscode-button-secondaryForeground, #fff)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '10px'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleOverrideSecretCommit}
+                  style={{
+                    padding: '5px 10px',
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'var(--vscode-foreground)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    opacity: 0.8
+                  }}
+                >
+                  Commit Anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Production Branch Guard Modal */}
+      {branchGuardAlert && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #f59e0b',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '380px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(245, 158, 11, 0.35)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24', fontWeight: 700, fontSize: '13px' }}>
+              <span>🛡️</span> Production Branch Guard
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
+              Direct commits on <code>{status?.branch || 'main'}</code> are guarded to prevent accidental production breakages.
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.2)',
+                borderRadius: '6px',
+                padding: '8px 10px',
+                fontSize: '11px',
+                lineHeight: '1.4'
+              }}
+            >
+              💡 <b>Recommended</b>: Let GitWizard automatically create a feature branch and move all your changes there with 1-click.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+              <button
+                onClick={handleRelocateBranch}
+                style={{
+                  padding: '8px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  boxShadow: '0 2px 8px rgba(59,130,246,0.3)'
+                }}
+              >
+                🌿 Create "{branchGuardAlert.suggestedFeatureBranch}" Instead
+              </button>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <button
+                  onClick={() => setBranchGuardAlert(null)}
+                  style={{
+                    padding: '5px 10px',
+                    background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                    color: 'var(--vscode-button-secondaryForeground, #fff)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '10px'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleOverrideBranchCommit}
+                  style={{
+                    padding: '5px 10px',
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'var(--vscode-foreground)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    opacity: 0.8
+                  }}
+                >
+                  Commit to {status?.branch || 'main'} Anyway
+                </button>
+              </div>
             </div>
           </div>
         </div>

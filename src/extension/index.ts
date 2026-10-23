@@ -12,6 +12,9 @@ import { AutoCheckpointController } from '../engine/auto-checkpoint';
 import { LicenseManager, LicenseStorage, LicenseStatus } from '../pro/license';
 import { AIService, AIProvider, AIModelConfig } from '../pro/ai-service';
 import { AICommitWizard } from '../wizards/ai-commit';
+import { SecretScanner, DetectedSecret } from '../pro/secret-scanner';
+import { SecretRemediationEngine } from '../pro/secret-remediation';
+import { ProductionBranchGuard } from '../pro/branch-guard';
 
 class VSCodeLicenseStorage implements LicenseStorage {
   constructor(private readonly memento: vscode.Memento) {}
@@ -56,6 +59,9 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _licenseManager: LicenseManager,
     private readonly _aiService: AIService,
     private readonly _aiCommitWizard: AICommitWizard,
+    private readonly _branchGuard: ProductionBranchGuard,
+    private readonly _secretScanner: SecretScanner,
+    private readonly _secretRemediation: SecretRemediationEngine,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -249,7 +255,7 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
             if (res.success) {
               vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
             } else {
-              vscode.window.showErrorMessage(`GitWizard: ${res.message}`);
+              vscode.window.showErrorMessage(`GitWizard Error: ${res.message}`);
             }
             await this.broadcastStatus();
           } catch (err: any) {
@@ -260,15 +266,64 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
 
         case 'SAFE_COMMIT': {
           try {
-            const res = await this._essentialsWizard.safeCommit(data.message);
-            if (res.success) {
+            const res = await this._essentialsWizard.safeCommit(data.message, {
+              allowProtected: data.allowProtected,
+              ignoreSecrets: data.ignoreSecrets
+            });
+
+            if (res.isProtectedBranch) {
+              this._view?.webview.postMessage({
+                type: 'BRANCH_GUARD_TRIGGERED',
+                suggestedFeatureBranch: res.suggestedFeatureBranch,
+                message: res.message
+              });
+            } else if (res.hasSecrets) {
+              this._view?.webview.postMessage({
+                type: 'SECRET_RADAR_TRIGGERED',
+                secrets: res.secrets,
+                message: res.message
+              });
+            } else if (res.success) {
               vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+              await this.broadcastStatus();
             } else {
               vscode.window.showWarningMessage(`GitWizard: ${res.message}`);
+              await this.broadcastStatus();
+            }
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Save Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'REMEDIATE_SECRETS': {
+          try {
+            const res = this._secretRemediation.remediateSecrets(data.secrets);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: Extracted ${res.remediated.length} secret(s) to .env & updated .gitignore! 🔒`);
+              this._view?.webview.postMessage({ type: 'SECRETS_REMEDIATED', success: true });
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Remediation Error: ${res.error}`);
             }
             await this.broadcastStatus();
           } catch (err: any) {
-            vscode.window.showErrorMessage(`GitWizard Save Error: ${err.message}`);
+            vscode.window.showErrorMessage(`GitWizard Remediation Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'RELOCATE_BRANCH': {
+          try {
+            const res = await this._branchGuard.relocateToFeatureBranch(data.newBranch);
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+              this._view?.webview.postMessage({ type: 'BRANCH_RELOCATED', success: true, branch: res.newBranch });
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Relocation Error: ${res.error || res.message}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Relocation Error: ${err.message}`);
           }
           break;
         }
@@ -429,12 +484,17 @@ export function activate(context: vscode.ExtensionContext) {
   const snapshotManager = new SnapshotManager(git);
   const runner = new TransactionRunner(git, snapshotManager);
 
+  // Pro Engines & Radar
+  const secretScanner = new SecretScanner();
+  const branchGuard = new ProductionBranchGuard(git, snapshotManager);
+  const secretRemediation = new SecretRemediationEngine(rootPath);
+
   const checkpointWizard = new CheckpointWizard(git, snapshotManager);
   const splitterWizard = new BranchSplitterWizard(git, snapshotManager, runner);
   const syncWizard = new SafeSyncWizard(git, snapshotManager);
   const undoWizard = new UndoWizard(git, snapshotManager);
   const repoSplitterWizard = new RepoSplitterWizard(git, snapshotManager, runner);
-  const essentialsWizard = new DailyEssentialsWizard(git, snapshotManager);
+  const essentialsWizard = new DailyEssentialsWizard(git, snapshotManager, branchGuard, secretScanner);
   const autoCheckpoint = new AutoCheckpointController(git, snapshotManager);
 
   // Pro Engines
@@ -483,6 +543,9 @@ export function activate(context: vscode.ExtensionContext) {
     licenseManager,
     aiService,
     aiCommitWizard,
+    branchGuard,
+    secretScanner,
+    secretRemediation,
     updateStatusBar
   );
 

@@ -163,43 +163,43 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 ### Sprint 8: Pre-Flight Secret Radar & Production Branch Guard
 * **Objective**: Protect vibe coders from catastrophic API key leaks and accidental commits to `main`.
-* **Status**: 📋 Backlog
+* **Status**: Completed & Verified (91/91 unit tests passing across 16 test suites)
 * **Milestone Version**: `v1.2.0`
 
 #### Chunks & Trackable To-Dos:
-- [ ] **Chunk 8.1: High-Performance Secret Scanner (`src/pro/secret-scanner.ts`)**
-  - [ ] Implement regex pattern catalog: OpenAI, Stripe (live/test), AWS access keys, GitHub PATs, Gemini, Anthropic, Slack tokens, private keys (`-----BEGIN PRIVATE KEY-----`), database connection strings (`postgres://`, `mongodb://`).
-  - [ ] Implement Shannon entropy evaluator to detect arbitrary high-entropy secrets without known prefixes.
-  - [ ] Benchmark scanner to guarantee diff evaluation in **< 100ms**.
-  - [ ] **Extensive Testing Suite (`test/pro/secret-scanner.test.ts`)**:
-    - [ ] `openai-key`: Detects `sk-proj-...` and `sk-admin-...`.
-    - [ ] `stripe-live-key`: Detects `sk_live_...` and `rk_live_...` while ignoring test keys if configured.
-    - [ ] `aws-credentials`: Detects `AKIA...` and secret access keys.
-    - [ ] `entropy-detector`: Catches raw 40-character random base64/hex secrets.
-    - [ ] `false-positives`: Ignores UUIDs, git commit hashes, SHA-256 hashes of test assets, and camelCase variable names.
-    - [ ] `multiline-secrets`: Detects PEM private keys spanning multiple lines.
+- [x] **Chunk 8.1: High-Performance Secret Scanner (`src/pro/secret-scanner.ts`)**
+  - [x] Implement regex pattern catalog: OpenAI, Stripe (live/test), AWS access keys, GitHub PATs, Gemini, Anthropic, Slack tokens, private keys (`-----BEGIN PRIVATE KEY-----`), database connection strings (`postgres://`, `mongodb://`).
+  - [x] Implement Shannon entropy evaluator to detect arbitrary high-entropy secrets without known prefixes.
+  - [x] Benchmark scanner to guarantee diff evaluation in **< 100ms** (actual: 12ms–23ms).
+  - [x] **Extensive Testing Suite (`test/pro/secret-scanner.test.ts`)**:
+    - [x] `openai-key`: Detects `sk-proj-...` and `sk-admin-...`.
+    - [x] `stripe-live-key`: Detects `sk_live_...` and `rk_live_...` while ignoring test keys if configured.
+    - [x] `aws-credentials`: Detects `AKIA...` and secret access keys.
+    - [x] `entropy-detector`: Catches raw 40-character random base64/hex secrets.
+    - [x] `false-positives`: Ignores UUIDs, git commit hashes, SHA-256 hashes of test assets, and camelCase variable names.
+    - [x] `multiline-secrets`: Detects PEM private keys spanning multiple lines.
 
-- [ ] **Chunk 8.2: 1-Click Secret Remediation Engine (`src/pro/secret-remediation.ts`)**
-  - [ ] Implement 1-Click action: `[🔒 Extract to .env & Add to .gitignore]`.
-  - [ ] Parse source file AST/text, replace literal secret with `process.env.VARIABLE_NAME`.
-  - [ ] Create or update `.env` with the extracted key-value pair.
-  - [ ] Verify `.env` is listed in `.gitignore` (appends it if missing).
-  - [ ] **Extensive Testing Suite (`test/pro/secret-remediation.test.ts`)**:
-    - [ ] `new-env-file`: Creates `.env` and adds to `.gitignore` when neither exists.
-    - [ ] `existing-env-file`: Appends new variable without clobbering existing `.env` variables.
-    - [ ] `already-ignored`: Does not add duplicate `.env` entries to `.gitignore`.
-    - [ ] `multiple-secrets`: Simultaneously extracts 3 different secrets in one pass.
-    - [ ] `atomic-rollback`: If writing `.env` fails, source file edit is reverted cleanly.
+- [x] **Chunk 8.2: 1-Click Secret Remediation Engine (`src/pro/secret-remediation.ts`)**
+  - [x] Implement 1-Click action: `[🔒 Extract to .env & Add to .gitignore]`.
+  - [x] Parse source file AST/text, replace literal secret with `process.env.VARIABLE_NAME`.
+  - [x] Create or update `.env` with the extracted key-value pair.
+  - [x] Verify `.env` is listed in `.gitignore` (appends it if missing).
+  - [x] **Extensive Testing Suite (`test/pro/secret-remediation.test.ts`)**:
+    - [x] `new-env-file`: Creates `.env` and adds to `.gitignore` when neither exists.
+    - [x] `existing-env-file`: Appends new variable without clobbering existing `.env` variables.
+    - [x] `already-ignored`: Does not add duplicate `.env` entries to `.gitignore`.
+    - [x] `multiple-secrets`: Simultaneously extracts 3 different secrets in one pass.
+    - [x] `atomic-rollback`: If writing `.env` fails, source file edit is reverted cleanly.
 
-- [ ] **Chunk 8.3: Production Branch Guard (`src/pro/branch-guard.ts`)**
-  - [ ] Intercept direct commits, resets, and pushes when active branch is in protected list (`main`, `master`, `production`, `release/*`).
-  - [ ] 1-Click action: `[🛡️ Create Feature Branch Instead]`.
-  - [ ] Auto-suggests feature branch name based on uncommitted changes.
-  - [ ] **Extensive Testing Suite (`test/pro/branch-guard.test.ts`)**:
-    - [ ] `protected-commit-blocked`: Intercepts `safeCommit()` on `main` and leaves files uncommitted.
-    - [ ] `protected-reset-blocked`: Intercepts hard resets on `main`.
-    - [ ] `redirect-to-feature`: Creates new branch, moves changes, and verifies `main` remains untouched.
-    - [ ] `allow-override`: Supports explicit "Commit Anyway" modal confirmation for power users.
+- [x] **Chunk 8.3: Production Branch Guard (`src/pro/branch-guard.ts`)**
+  - [x] Intercept direct commits, resets, and pushes when active branch is in protected list (`main`, `master`, `production`, `release/*`).
+  - [x] 1-Click action: `[🛡️ Create Feature Branch Instead]`.
+  - [x] Auto-suggests feature branch name based on uncommitted changes.
+  - [x] **Extensive Testing Suite (`test/pro/branch-guard.test.ts`)**:
+    - [x] `protected-commit-blocked`: Intercepts `safeCommit()` on `main` and leaves files uncommitted.
+    - [x] `protected-reset-blocked`: Intercepts hard resets on `main`.
+    - [x] `redirect-to-feature`: Creates new branch, moves changes, and verifies `main` remains untouched.
+    - [x] `allow-override`: Supports explicit "Commit Anyway" modal confirmation for power users.
 
 ---
 

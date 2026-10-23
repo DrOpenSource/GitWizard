@@ -5,28 +5,50 @@
 
 import { GitClient } from '../engine/git-client';
 import { SnapshotManager } from '../engine/snapshot';
+import { SecretScanner, DetectedSecret } from '../pro/secret-scanner';
+import { ProductionBranchGuard } from '../pro/branch-guard';
+import fs from 'node:fs';
+import path from 'node:path';
+
+export interface SafeCommitOptions {
+  allowProtected?: boolean;
+  ignoreSecrets?: boolean;
+}
 
 export interface EssentialResult {
   success: boolean;
   message: string;
   detail?: string;
   rolledBack?: boolean;
+  isProtectedBranch?: boolean;
+  suggestedFeatureBranch?: string;
+  hasSecrets?: boolean;
+  secrets?: DetectedSecret[];
 }
 
 export class DailyEssentialsWizard {
   readonly git: GitClient;
   readonly snapshotManager: SnapshotManager;
+  readonly branchGuard?: ProductionBranchGuard;
+  readonly secretScanner?: SecretScanner;
 
-  constructor(git: GitClient, snapshotManager: SnapshotManager) {
+  constructor(
+    git: GitClient,
+    snapshotManager: SnapshotManager,
+    branchGuard?: ProductionBranchGuard,
+    secretScanner?: SecretScanner
+  ) {
     this.git = git;
     this.snapshotManager = snapshotManager;
+    this.branchGuard = branchGuard;
+    this.secretScanner = secretScanner;
   }
 
   /**
    * Safe Commit: Stages all changes and commits with a user message.
-   * Takes a safety snapshot beforehand.
+   * Takes a safety snapshot beforehand. Protected branches and secrets are guarded.
    */
-  async safeCommit(commitMessage: string): Promise<EssentialResult> {
+  async safeCommit(commitMessage: string, options: SafeCommitOptions = {}): Promise<EssentialResult> {
     const trimmed = commitMessage.trim();
     if (!trimmed) {
       throw new Error('Please enter a commit message describing your changes.');
@@ -39,6 +61,32 @@ export class DailyEssentialsWizard {
         success: false,
         message: 'No changes to commit. Your workspace is completely clean!'
       };
+    }
+
+    // 1. Production Branch Guard check
+    if (this.branchGuard && !options.allowProtected) {
+      const guardEval = await this.branchGuard.evaluateAction('commit');
+      if (!guardEval.allowed) {
+        return {
+          success: false,
+          isProtectedBranch: true,
+          suggestedFeatureBranch: guardEval.suggestedFeatureBranch,
+          message: guardEval.reason || `Branch '${guardEval.branch}' is protected.`
+        };
+      }
+    }
+
+    // 2. Pre-Flight Secret Radar check
+    if (this.secretScanner && !options.ignoreSecrets) {
+      const secrets = await this.scanWorkingTreeForSecrets();
+      if (secrets.length > 0) {
+        return {
+          success: false,
+          hasSecrets: true,
+          secrets,
+          message: `GitWizard Secret Radar: Found ${secrets.length} exposed secret(s) in your changes.`
+        };
+      }
     }
 
     // Safety snapshot
@@ -57,6 +105,37 @@ export class DailyEssentialsWizard {
       message: `Safely saved commit [${shortSha}]: "${trimmed}"`,
       detail: res.stdout
     };
+  }
+
+  private async scanWorkingTreeForSecrets(): Promise<DetectedSecret[]> {
+    if (!this.secretScanner) return [];
+
+    const found: DetectedSecret[] = [];
+
+    // 1. Scan diff against HEAD
+    const diffRes = await this.git.exec(['diff', 'HEAD'], { allowFailure: true });
+    if (diffRes.stdout) {
+      const diffScan = this.secretScanner.scanContent(diffRes.stdout, 'working-tree-diff');
+      found.push(...diffScan.secrets);
+    }
+
+    // 2. Scan untracked files
+    const status = await this.git.getStatus();
+    for (const file of status.untracked) {
+      if (/\.(png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|exe|dll|so|woff|woff2)$/i.test(file)) continue;
+      if (file.endsWith('-lock.json') || file.endsWith('.lock')) continue;
+
+      const fullPath = path.isAbsolute(file) ? file : path.join(this.git.repoPath, file);
+      try {
+        if (fs.existsSync(fullPath) && fs.statSync(fullPath).size < 1000000) {
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          const fileScan = this.secretScanner.scanContent(content, file);
+          found.push(...fileScan.secrets);
+        }
+      } catch {}
+    }
+
+    return found;
   }
 
   /**
