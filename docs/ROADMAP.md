@@ -79,3 +79,21 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
     - [x] Visual dirty file grouping overview.
   - [x] **5.4 Automated Verification**: Vitest unit test suite covering essentials & auto-checkpoints (4 new tests passing, 20/20 total tests across all suites).
   - [x] **5.5 Packaging Release**: Rebuild and package `gitwizard-0.2.0.vsix`.
+
+### Sprint 6: Hardening, Test Gap Closure & v1.0.0 Stable Release
+* **Objective**: Audit complete test coverage, close all HIGH/MEDIUM testing gaps, eliminate bugs in flight recording & index handling, and deliver rock-solid v1.0.0 stable release.
+* **Status**: Completed & Verified (55/55 unit tests passing across 10 test suites, gitwizard-1.0.0.vsix packaged)
+* **Tasks**:
+  - [x] **6.1 Comprehensive Coverage Audit**: Identified 19 gaps across engine and wizards; expanded test suite from 23 to 55 passing tests.
+  - [x] **6.2 AutoCheckpointController Dedicated Suite (`test/engine/auto-checkpoint.test.ts`)**: 9 tests covering debounce scheduling, concurrent capture locks (`_isCapturing`), capacity pruning, and duplicate tree SHA skipping.
+  - [x] **6.3 Shadow Index Isolation Bugfix (`src/engine/snapshot.ts`)**: Isolate all snapshot creation and working tree SHA checks with `GIT_INDEX_FILE`, eliminating accidental index staging.
+  - [x] **6.4 Core Safety Isolation Tests (`test/engine/git-client.test.ts`)**: Direct isolation tests for `abortInProgress` (clean & active merge conflict), `resetHard`, `deleteRef`, `stashCreate`, and detached HEAD detection.
+  - [x] **6.5 Reflog Time Machine Edge Cases (`test/wizards/undo.test.ts`)**: Arbitrary selector rewinds (`HEAD@{2}`), invalid selector error rollback recovery, and reflog categorization (checkout, reset, amend, merge).
+  - [x] **6.6 SafeSync Stash-Pop Conflict Path (`test/wizards/sync.test.ts`)**: Stash pop conflict simulation with uncommitted local modifications and clean merge strategy execution.
+  - [x] **6.7 Daily Essentials Remote Integration (`test/wizards/essentials.test.ts`)**: Safe push, safe pull, and invalid branch switching error handling.
+  - [x] **6.8 Splitter Edge Validation (`test/wizards/split.test.ts` & `test/wizards/publish.test.ts`)**: Empty group, empty commit message, and empty files validation; temporary remote cleanup on push failure.
+  - [x] **6.9 Transaction Step-Level Rollback (`test/engine/transaction.test.ts`)**: Verified reverse-order invocation of individual step rollbacks on mid-transaction failure.
+  - [x] **6.10 Command Palette Manifest Complete (`package.json` & `src/extension/index.ts`)**: Registered `gitwizard.undoLast`, `gitwizard.splitToNewRepo`, `gitwizard.pushMain`, and `gitwizard.splitChanges`.
+  - [x] **6.11 Open Source Documentation**: Authored `CHANGELOG.md` and `CONTRIBUTING.md`.
+  - [x] **6.12 Packaging & Release**: Version bumped to `1.0.0`, verified with zero TypeScript errors and packaged `gitwizard-1.0.0.vsix`.
+

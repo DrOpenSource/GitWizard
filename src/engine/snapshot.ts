@@ -15,6 +15,7 @@ export interface SnapshotMetadata {
   branch: string;
   headSha: string;
   snapshotSha: string;
+  treeSha?: string;
 }
 
 export class SnapshotManager {
@@ -26,6 +27,33 @@ export class SnapshotManager {
     this.metadataDir = path.join(this.git.repoPath, '.git', 'gitwizard', 'snapshots');
     if (!fs.existsSync(this.metadataDir)) {
       fs.mkdirSync(this.metadataDir, { recursive: true });
+    }
+  }
+
+  /**
+   * Computes the Git tree SHA for current working tree (including untracked files)
+   * using an isolated temporary index so the user's real index is untouched.
+   */
+  async getWorkingTreeSha(): Promise<string | null> {
+    const tempIndexFile = path.join(os.tmpdir(), `gw-tree-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+    try {
+      const realIndex = path.join(this.git.repoPath, '.git', 'index');
+      if (fs.existsSync(realIndex)) {
+        fs.copyFileSync(realIndex, tempIndexFile);
+      }
+      await this.git.exec(['add', '-A'], { allowFailure: true, env: { GIT_INDEX_FILE: tempIndexFile } });
+      const res = await this.git.exec(['write-tree'], { allowFailure: true, env: { GIT_INDEX_FILE: tempIndexFile } });
+      return res.exitCode === 0 && res.stdout.trim() ? res.stdout.trim() : null;
+    } catch {
+      return null;
+    } finally {
+      if (fs.existsSync(tempIndexFile)) {
+        try {
+          fs.unlinkSync(tempIndexFile);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
     }
   }
 
@@ -54,10 +82,10 @@ export class SnapshotManager {
       }
 
       // Add all changes (including untracked files) to temp index
-      await this.git.exec(['add', '-A'], { allowFailure: true });
+      await this.git.exec(['add', '-A'], { allowFailure: true, env: { GIT_INDEX_FILE: tempIndexFile } });
       
       // Write tree
-      const treeRes = await this.git.exec(['write-tree']);
+      const treeRes = await this.git.exec(['write-tree'], { env: { GIT_INDEX_FILE: tempIndexFile } });
       const treeSha = treeRes.stdout.trim();
 
       // Commit tree with HEAD as parent (if HEAD exists)
@@ -78,7 +106,8 @@ export class SnapshotManager {
         timestamp,
         branch,
         headSha,
-        snapshotSha
+        snapshotSha,
+        treeSha
       };
 
       // Write metadata file

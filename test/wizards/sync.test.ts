@@ -92,4 +92,47 @@ describe('SafeSyncWizard', () => {
     const midState = await client.checkMidOperationState();
     expect(midState.inMerge).toBe(false);
   });
+
+  it('pulls remote commits cleanly using merge strategy', async () => {
+    const collaboratorPath = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-merge-'));
+    execSync(`git clone -b main "${remoteRepoPath}" .`, { cwd: collaboratorPath });
+    execSync('git config user.name "Collab"', { cwd: collaboratorPath });
+    execSync('git config user.email "collab@test.com"', { cwd: collaboratorPath });
+
+    fs.writeFileSync(path.join(collaboratorPath, 'merge_file.txt'), 'merge strategy content');
+    execSync('git add . && git commit -m "feat via merge" && git push origin main', { cwd: collaboratorPath });
+    fs.rmSync(collaboratorPath, { recursive: true, force: true });
+
+    const res = await wizard.safeSync({ remote: 'origin', strategy: 'merge' });
+    expect(res.success).toBe(true);
+    expect(res.commitsPulled).toBe(1);
+    expect(fs.existsSync(path.join(localRepoPath, 'merge_file.txt'))).toBe(true);
+  });
+
+  it('handles stash pop conflict when uncommitted local changes conflict with pulled commits', async () => {
+    // 1. Collaborator commits and pushes changes to common.txt
+    const collaboratorPath = fs.mkdtempSync(path.join(os.tmpdir(), 'collab-stash-'));
+    execSync(`git clone -b main "${remoteRepoPath}" .`, { cwd: collaboratorPath });
+    execSync('git config user.name "Collab"', { cwd: collaboratorPath });
+    execSync('git config user.email "collab@test.com"', { cwd: collaboratorPath });
+
+    fs.writeFileSync(path.join(collaboratorPath, 'common.txt'), 'REMOTE UNCOMMITTED CONFLICT LINE');
+    execSync('git add common.txt && git commit -m "upstream change to common" && git push origin main', { cwd: collaboratorPath });
+    fs.rmSync(collaboratorPath, { recursive: true, force: true });
+
+    // 2. Local repo has UNCOMMITTED changes to the same file (not committed, so it gets stashed)
+    fs.writeFileSync(path.join(localRepoPath, 'common.txt'), 'LOCAL DIRTY UNCOMMITTED LINE');
+
+    // 3. Run safeSync: local uncommitted changes are stashed, pull succeeds, but stash pop fails due to conflict
+    const res = await wizard.safeSync({ remote: 'origin' });
+
+    expect(res.success).toBe(false);
+    expect(res.conflictDetected).toBe(true);
+    expect(res.rolledBack).toBe(true);
+    expect(res.message).toContain('reapplying local changes');
+
+    // 4. Verify local dirty uncommitted edit was safely restored from snapshot
+    expect(fs.readFileSync(path.join(localRepoPath, 'common.txt'), 'utf-8')).toBe('LOCAL DIRTY UNCOMMITTED LINE');
+  });
 });
+

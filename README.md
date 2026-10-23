@@ -47,7 +47,7 @@ When things go wrong—such as messy working trees, accidental merge conflicts, 
 ### Installing in VS Code / Cursor / Antigravity
 1. Open the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`).
 2. Click the `...` menu in the top-right of the Extensions panel.
-3. Select **Install from VSIX...** and choose `gitwizard-0.3.0.vsix`.
+3. Select **Install from VSIX...** and choose `gitwizard-1.0.0.vsix`.
 4. Click the **GitWizard** wand icon (`$(wand)`) in the Activity Bar or check the Status Bar!
 
 ---

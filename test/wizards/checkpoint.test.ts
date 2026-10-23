@@ -68,4 +68,16 @@ describe('CheckpointWizard', () => {
     expect(diff.length).toBeGreaterThanOrEqual(1);
     expect(diff.map(d => d.path)).toContain('app.ts');
   });
+
+  it('deletes a checkpoint and its underlying snapshot', async () => {
+    const snap = await wizard.saveCheckpoint('to-remove');
+    const listBefore = await wizard.listCheckpoints();
+    expect(listBefore.some(c => c.id === snap.id)).toBe(true);
+
+    await wizard.deleteCheckpoint(snap.id);
+
+    const listAfter = await wizard.listCheckpoints();
+    expect(listAfter.some(c => c.id === snap.id)).toBe(false);
+  });
 });
+

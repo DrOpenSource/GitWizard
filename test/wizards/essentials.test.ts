@@ -98,4 +98,55 @@ describe('DailyEssentialsWizard & AutoCheckpointController', () => {
     const snaps = await snapshotManager.listSnapshots();
     expect(snaps.some(s => s.id === snap?.id)).toBe(true);
   });
+
+  it('safely pushes commits to remote with upstream tracking', async () => {
+    // Setup bare remote
+    const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ess-remote-'));
+    try {
+      execSync('git init --bare -b main', { cwd: remoteDir });
+      execSync(`git remote add origin "${remoteDir}"`, { cwd: testRepoPath });
+
+      // Add a commit
+      fs.writeFileSync(path.join(testRepoPath, 'push-test.txt'), 'push content');
+      execSync('git add . && git commit -m "commit for push"', { cwd: testRepoPath });
+
+      const pushRes = await essentials.safePush('origin');
+      expect(pushRes.success).toBe(true);
+      expect(pushRes.message).toContain('successfully');
+    } finally {
+      fs.rmSync(remoteDir, { recursive: true, force: true });
+    }
+  });
+
+  it('safely pulls updates from remote', async () => {
+    const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ess-remote-pull-'));
+    const peerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ess-peer-'));
+    try {
+      execSync('git init --bare -b main', { cwd: remoteDir });
+      execSync(`git remote add origin "${remoteDir}"`, { cwd: testRepoPath });
+      execSync('git push -u origin main', { cwd: testRepoPath });
+
+      // Peer repo clones and pushes a change
+      execSync(`git clone -b main "${remoteDir}" .`, { cwd: peerDir });
+      execSync('git config user.name "Peer"', { cwd: peerDir });
+      execSync('git config user.email "peer@example.com"', { cwd: peerDir });
+      fs.writeFileSync(path.join(peerDir, 'peer-update.txt'), 'peer content');
+      execSync('git add . && git commit -m "peer commit" && git push origin main', { cwd: peerDir });
+
+      // Local safe pull
+      const pullRes = await essentials.safePull('origin');
+      expect(pullRes.success).toBe(true);
+      expect(fs.existsSync(path.join(testRepoPath, 'peer-update.txt'))).toBe(true);
+    } finally {
+      fs.rmSync(peerDir, { recursive: true, force: true });
+      fs.rmSync(remoteDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns failure message when switching to non-existent branch', async () => {
+    const res = await essentials.switchBranch('non-existent-branch-xyz');
+    expect(res.success).toBe(false);
+    expect(res.message).toContain("Failed to switch to 'non-existent-branch-xyz'");
+  });
 });
+

@@ -483,6 +483,34 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Undo Last Action Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.undoLast', async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        'GitWizard: Rewind last Git action to HEAD@{1}?',
+        { modal: true },
+        'Undo Action'
+      );
+      if (confirm === 'Undo Action') {
+        try {
+          const res = await undoWizard.undoLastAction();
+          vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+          provider.broadcastStatus();
+        } catch (err: any) {
+          vscode.window.showErrorMessage(`GitWizard Undo Error: ${err.message}`);
+        }
+      }
+    })
+  );
+
+  // Split Changes Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.splitChanges', async () => {
+      await vscode.commands.executeCommand('gitwizard.sidebarView.focus');
+      vscode.window.showInformationMessage('GitWizard: Select files in the sidebar Branch Splitter to organize branches.');
+    })
+  );
+
   updateStatusBar();
 }
 

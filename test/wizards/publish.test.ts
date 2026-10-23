@@ -78,4 +78,29 @@ describe('RepoSplitterWizard', () => {
       })
     ).rejects.toThrow(/does not exist/);
   });
+
+  it('cleans up temporary remote and restores workspace if push fails', async () => {
+    const result = await wizard.splitToNewRepo({
+      sourceBranch: 'feature/experiment',
+      newRepoName: 'fail-push-repo',
+      customRemoteUrl: 'file:///invalid/path/does/not/exist'
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+
+    // Verify temp remote was cleaned up
+    const remotesRes = await client.exec(['remote']);
+    expect(remotesRes.stdout).not.toContain('remote-fail-push-repo');
+  });
+
+  it('pushes current branch to origin successfully', async () => {
+    // Add origin remote pointing to targetBareRepoPath
+    execSync(`git remote add origin "${targetBareRepoPath}"`, { cwd: sourceRepoPath });
+
+    const pushRes = await wizard.pushToOrigin('main');
+    expect(pushRes.success).toBe(true);
+    expect(pushRes.message).toContain('Successfully pushed');
+  });
 });
+

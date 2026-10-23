@@ -42,7 +42,10 @@ export class GitClient {
   /**
    * Execute raw git command with safety timeout
    */
-  async exec(args: string[], options: { timeoutMs?: number; allowFailure?: boolean } = {}): Promise<GitExecResult> {
+  async exec(
+    args: string[],
+    options: { timeoutMs?: number; allowFailure?: boolean; env?: NodeJS.ProcessEnv } = {}
+  ): Promise<GitExecResult> {
     const timeout = options.timeoutMs ?? 15000;
     try {
       const { stdout, stderr } = await execFileAsync('git', args, {
@@ -52,7 +55,8 @@ export class GitClient {
         env: {
           ...process.env,
           GIT_TERMINAL_PROMPT: '0', // Never hang waiting for interactive terminal credentials
-          GIT_PAGER: 'cat'
+          GIT_PAGER: 'cat',
+          ...(options.env ?? {})
         }
       });
       return {

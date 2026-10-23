@@ -57,13 +57,13 @@ export class AutoCheckpointController {
       }
 
       // Check current tree SHA to avoid duplicate snapshots if nothing actually changed
-      const currentTree = await this.git.exec(['write-tree'], { allowFailure: true });
-      if (currentTree.exitCode === 0 && currentTree.stdout.trim() === this._lastSnapshotSha) {
+      const currentTreeSha = await this.snapshotManager.getWorkingTreeSha();
+      if (currentTreeSha && currentTreeSha === this._lastSnapshotSha) {
         return null;
       }
 
       const snap = await this.snapshotManager.createSnapshot(`auto-${label}`);
-      this._lastSnapshotSha = currentTree.exitCode === 0 ? currentTree.stdout.trim() : null;
+      this._lastSnapshotSha = snap.treeSha ?? currentTreeSha;
 
       // Clean up older auto-snapshots beyond max capacity
       await this.pruneOldAutoSnapshots();

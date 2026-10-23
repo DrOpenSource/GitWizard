@@ -82,4 +82,40 @@ describe('TransactionRunner', () => {
     const restoredContent = fs.readFileSync(path.join(testRepoPath, 'feature.txt'), 'utf-8');
     expect(restoredContent).toBe(originalContent);
   });
+
+  it('invokes step-level rollback handlers in reverse order when a later step fails', async () => {
+    const rollbackOrder: string[] = [];
+
+    const result = await runner.runTransaction('reverse-rollback-flow', [
+      {
+        name: 'step-A',
+        run: async () => 'result-A',
+        rollback: async () => {
+          rollbackOrder.push('step-A');
+        }
+      },
+      {
+        name: 'step-B',
+        run: async () => 'result-B',
+        rollback: async () => {
+          rollbackOrder.push('step-B');
+        }
+      },
+      {
+        name: 'step-C-failing',
+        run: async () => {
+          throw new Error('Failure in C');
+        },
+        rollback: async () => {
+          rollbackOrder.push('step-C');
+        }
+      }
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.rolledBack).toBe(true);
+    // Completed steps were A then B. Rollback must run B then A. Step C didn't complete so its rollback is not called.
+    expect(rollbackOrder).toEqual(['step-B', 'step-A']);
+  });
 });
+

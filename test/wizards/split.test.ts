@@ -98,4 +98,31 @@ describe('BranchSplitterWizard', () => {
     // Verify working file was preserved
     expect(fs.existsSync(path.join(testRepoPath, 'temp.ts'))).toBe(true);
   });
+
+  it('rejects split when no groups are defined', async () => {
+    await expect(
+      wizard.splitChanges({ groups: [] })
+    ).rejects.toThrow('At least one split group must be defined');
+  });
+
+  it('rejects split when group has empty branchName, commitMessage, or empty files', async () => {
+    await expect(
+      wizard.splitChanges({
+        groups: [{ branchName: '   ', commitMessage: 'msg', files: ['a.txt'] }]
+      })
+    ).rejects.toThrow('Branch name cannot be empty');
+
+    await expect(
+      wizard.splitChanges({
+        groups: [{ branchName: 'feature/valid', commitMessage: '  ', files: ['a.txt'] }]
+      })
+    ).rejects.toThrow("Commit message cannot be empty for branch 'feature/valid'");
+
+    await expect(
+      wizard.splitChanges({
+        groups: [{ branchName: 'feature/valid', commitMessage: 'msg', files: [] }]
+      })
+    ).rejects.toThrow("Group 'feature/valid' has no files selected");
+  });
 });
+
