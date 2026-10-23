@@ -99,46 +99,177 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 ---
 
-## 🚀 GitWizard Pro ($9.99/mo) Roadmap
+---
 
-> Full architecture, UX blueprints, and user journeys are detailed in [docs/PRO_SPECIFICATION.md](file:///c:/Users/user/Desktop/Dr_OpenSource/Projects/GitWizard/docs/PRO_SPECIFICATION.md).
+## 🚀 GitWizard Pro — Master Implementation Plan ($49 Lifetime / $29 Early Bird)
 
-### Sprint 7: Pro Foundation & AI Semantic Commit/PR Generator
-* **Objective**: Build licensing gatekeeper, Pro UI badge system, and the AI Commit & Auto-PR Generator.
+> **Commercial Model**: **$49 One-Time Lifetime License** (Launch Special: **$29**, Zero Subscriptions).  
+> **Core Architecture**: Zero-COGS, client-side execution, Bring-Your-Own-Key (BYOK) AI, and private GitHub storage sync.  
+> **Reference Specs**: Complete user journeys and UX designs in [docs/PRO_SPECIFICATION.md](file:///c:/Users/user/Desktop/Dr_OpenSource/Projects/GitWizard/docs/PRO_SPECIFICATION.md).
+
+---
+
+### Sprint 7: Pro Foundation, Offline Cryptographic Licensing & AI Semantic Commit/PR Generator
+* **Objective**: Build the offline cryptographic licensing engine (14-day zero-card trial) and the #1 daily vibe-coder superpower: AI-generated conventional commits and PR summaries.
 * **Status**: ⏳ Ready for Development
-* **Tasks**:
-  - [ ] **7.1 Offline License Verification (`src/pro/license.ts`)**: Cryptographic Ed25519/HMAC license key verifier with 14-day zero-card trial.
-  - [ ] **7.2 Provider-Agnostic AI Service (`src/pro/ai-service.ts`)**: Unified client supporting Gemini, OpenAI, and BYOK settings.
-  - [ ] **7.3 AI Commit & PR Wizard (`src/wizards/ai-commit.ts`)**: Conventional commit generator and PR description drafter from git diffs.
-  - [ ] **7.4 Webview Pro Integration (`src/webview/App.tsx`)**: "✨ Generate with AI" button in Daily Essentials deck + License Activation modal.
-  - [ ] **7.5 Automated Test Suite (`test/pro/ai-commit.test.ts` & `test/pro/license.test.ts`)**: 100% unit test coverage for license validation and mock AI responses.
+* **Milestone Version**: `v1.1.0`
+
+#### Chunks & Trackable To-Dos:
+- [ ] **Chunk 7.1: Cryptographic Offline License Engine (`src/pro/license.ts`)**
+  - [ ] Implement Ed25519 / HMAC-SHA256 signature verification in Node.js `crypto`.
+  - [ ] Implement format parser: `GWPRO-LIFETIME-<emailBase64>-<issuedTimestamp>-<signature>`.
+  - [ ] Implement 14-day local trial with tamper-resistant local state in VS Code GlobalState.
+  - [ ] Implement graceful fallback: If license is invalid or trial expires, Free Tier remains 100% active; NEVER lock user out of repositories.
+  - [ ] **Extensive Testing Suite (`test/pro/license.test.ts`)**:
+    - [ ] `valid-license`: Successfully verifies authentic signed key.
+    - [ ] `tampered-key`: Rejects modified payload or corrupted signature.
+    - [ ] `trial-active`: Reports active trial with remaining days calculated correctly.
+    - [ ] `trial-expired`: Reports expired trial and falls back to Free tier without throwing errors.
+    - [ ] `clock-rollback`: Detects local system clock manipulation attempt.
+    - [ ] `empty-and-malformed`: Rejects arbitrary strings, whitespace, or invalid base64.
+
+- [ ] **Chunk 7.2: Provider-Agnostic AI Service (`src/pro/ai-service.ts`)**
+  - [ ] Create unified `AIService` interface with support for Google Gemini, OpenAI (`gpt-4o-mini`), and local Ollama.
+  - [ ] Store API keys securely in VS Code `SecretStorage`.
+  - [ ] Implement token estimation and automatic diff truncation (>12,000 tokens trimmed cleanly).
+  - [ ] Filter out lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) and binary assets from diff prompts.
+  - [ ] **Extensive Testing Suite (`test/pro/ai-service.test.ts`)**:
+    - [ ] `gemini-provider`: Successful prompt and response formatting.
+    - [ ] `openai-provider`: Successful prompt and response formatting.
+    - [ ] `ollama-local`: Fallback to local HTTP endpoint when offline.
+    - [ ] `missing-api-key`: Friendly error prompting user to enter key in settings.
+    - [ ] `rate-limit-429`: Automatic exponential backoff retry.
+    - [ ] `diff-pruning`: Correctly strips 50,000-line lockfiles while preserving code diffs.
+
+- [ ] **Chunk 7.3: AI Semantic Conventional Commit & PR Generator (`src/wizards/ai-commit.ts`)**
+  - [ ] Create `AICommitWizard` analyzing staged + unstaged diffs.
+  - [ ] Enforce conventional commit output format: `type(scope): summary` + bulleted changes.
+  - [ ] Generate structured PR description: `Problem`, `Solution`, `Impact`, `Testing`.
+  - [ ] **Extensive Testing Suite (`test/wizards/ai-commit.test.ts`)**:
+    - [ ] `single-file-commit`: Generates concise semantic message for single-file diff.
+    - [ ] `multi-file-commit`: Accurately groups multi-file changes under correct scope.
+    - [ ] `empty-diff`: Gracefully warns user when workspace is clean.
+    - [ ] `untracked-files`: Reads content of new untracked files into diff context.
+    - [ ] `malformed-llm-response`: Fallbacks gracefully to fallback message if LLM returns garbage.
+
+- [ ] **Chunk 7.4: Webview UI Integration (`src/webview/App.tsx`)**
+  - [ ] Add `[✨ Generate with AI]` button in the Daily Essentials Commit Card.
+  - [ ] Add editable preview textarea so the user can tweak the generated commit message before saving.
+  - [ ] Add Pro Status indicator badge in sidebar header with "Activate License" modal.
+  - [ ] Add loading spinner and error alert banner for AI generation.
+
+---
 
 ### Sprint 8: Pre-Flight Secret Radar & Production Branch Guard
 * **Objective**: Protect vibe coders from catastrophic API key leaks and accidental commits to `main`.
 * **Status**: 📋 Backlog
-* **Tasks**:
-  - [ ] **8.1 High-Entropy Secret Scanner (`src/pro/secret-scanner.ts`)**: Scans diffs for OpenAI, Stripe, AWS, GitHub tokens before commit/push.
-  - [ ] **8.2 1-Click Secret Remediation (`src/pro/secret-remediation.ts`)**: Extracts hardcoded secrets to `.env` and adds to `.gitignore`.
-  - [ ] **8.3 Protected Branch Guard (`src/pro/branch-guard.ts`)**: Blocks direct commit/reset on `main` and offers 1-click feature branch creation.
-  - [ ] **8.4 Radar Webview Badge & Alert Card**: Plain-English blocker with 1-click remediation button.
-  - [ ] **8.5 Automated Test Suite (`test/pro/secret-scanner.test.ts` & `test/pro/branch-guard.test.ts`)**.
+* **Milestone Version**: `v1.2.0`
 
-### Sprint 9: Surgical Per-File Rewind & AI Auto-Split
-* **Objective**: Enable per-file surgical time travel and multi-branch AI clustering.
+#### Chunks & Trackable To-Dos:
+- [ ] **Chunk 8.1: High-Performance Secret Scanner (`src/pro/secret-scanner.ts`)**
+  - [ ] Implement regex pattern catalog: OpenAI, Stripe (live/test), AWS access keys, GitHub PATs, Gemini, Anthropic, Slack tokens, private keys (`-----BEGIN PRIVATE KEY-----`), database connection strings (`postgres://`, `mongodb://`).
+  - [ ] Implement Shannon entropy evaluator to detect arbitrary high-entropy secrets without known prefixes.
+  - [ ] Benchmark scanner to guarantee diff evaluation in **< 100ms**.
+  - [ ] **Extensive Testing Suite (`test/pro/secret-scanner.test.ts`)**:
+    - [ ] `openai-key`: Detects `sk-proj-...` and `sk-admin-...`.
+    - [ ] `stripe-live-key`: Detects `sk_live_...` and `rk_live_...` while ignoring test keys if configured.
+    - [ ] `aws-credentials`: Detects `AKIA...` and secret access keys.
+    - [ ] `entropy-detector`: Catches raw 40-character random base64/hex secrets.
+    - [ ] `false-positives`: Ignores UUIDs, git commit hashes, SHA-256 hashes of test assets, and camelCase variable names.
+    - [ ] `multiline-secrets`: Detects PEM private keys spanning multiple lines.
+
+- [ ] **Chunk 8.2: 1-Click Secret Remediation Engine (`src/pro/secret-remediation.ts`)**
+  - [ ] Implement 1-Click action: `[🔒 Extract to .env & Add to .gitignore]`.
+  - [ ] Parse source file AST/text, replace literal secret with `process.env.VARIABLE_NAME`.
+  - [ ] Create or update `.env` with the extracted key-value pair.
+  - [ ] Verify `.env` is listed in `.gitignore` (appends it if missing).
+  - [ ] **Extensive Testing Suite (`test/pro/secret-remediation.test.ts`)**:
+    - [ ] `new-env-file`: Creates `.env` and adds to `.gitignore` when neither exists.
+    - [ ] `existing-env-file`: Appends new variable without clobbering existing `.env` variables.
+    - [ ] `already-ignored`: Does not add duplicate `.env` entries to `.gitignore`.
+    - [ ] `multiple-secrets`: Simultaneously extracts 3 different secrets in one pass.
+    - [ ] `atomic-rollback`: If writing `.env` fails, source file edit is reverted cleanly.
+
+- [ ] **Chunk 8.3: Production Branch Guard (`src/pro/branch-guard.ts`)**
+  - [ ] Intercept direct commits, resets, and pushes when active branch is in protected list (`main`, `master`, `production`, `release/*`).
+  - [ ] 1-Click action: `[🛡️ Create Feature Branch Instead]`.
+  - [ ] Auto-suggests feature branch name based on uncommitted changes.
+  - [ ] **Extensive Testing Suite (`test/pro/branch-guard.test.ts`)**:
+    - [ ] `protected-commit-blocked`: Intercepts `safeCommit()` on `main` and leaves files uncommitted.
+    - [ ] `protected-reset-blocked`: Intercepts hard resets on `main`.
+    - [ ] `redirect-to-feature`: Creates new branch, moves changes, and verifies `main` remains untouched.
+    - [ ] `allow-override`: Supports explicit "Commit Anyway" modal confirmation for power users.
+
+---
+
+### Sprint 9: Surgical Per-File Rewind & AI Auto-Splitter
+* **Objective**: Enable single-file surgical time travel and multi-branch AI clustering for 20-file AI prompt sessions.
 * **Status**: 📋 Backlog
-* **Tasks**:
-  - [ ] **9.1 Surgical File Rewind (`src/pro/file-rewind.ts`)**: Restores single file from shadow snapshot ref without touching other modified files.
-  - [ ] **9.2 AI Multi-Branch Auto-Splitter (`src/pro/ai-splitter.ts`)**: Clusters 10+ modified files into clean PR branches via semantic analysis.
-  - [ ] **9.3 Timeline Context Menu & Auto-Split UI**: Right-click per-file rewind and 1-click auto-split approval cards.
-  - [ ] **9.4 Automated Test Suite (`test/pro/file-rewind.test.ts` & `test/pro/ai-splitter.test.ts`)**.
+* **Milestone Version**: `v1.3.0`
 
-### Sprint 10: Smart AI Conflict Resolver & Cloud Sync Bridge
+#### Chunks & Trackable To-Dos:
+- [ ] **Chunk 9.1: Surgical File Rewind Engine (`src/pro/file-rewind.ts`)**
+  - [ ] Implement single-file restore: `git checkout refs/gitwizard/snapshots/<snapId> -- <filePath>`.
+  - [ ] Verify main index and other modified files are 100% untouched.
+  - [ ] Take pre-restore safety snapshot of the single file before overwriting.
+  - [ ] **Extensive Testing Suite (`test/pro/file-rewind.test.ts`)**:
+    - [ ] `single-modified-file`: Restores 1 modified file while leaving 5 other modified files intact.
+    - [ ] `single-deleted-file`: Restores a file that was deleted from disk back to its snapshot state.
+    - [ ] `single-untracked-file`: Overwrites untracked file cleanly if snapshot had a prior version.
+    - [ ] `non-existent-file-in-snap`: Throws descriptive error without corrupting working tree.
+    - [ ] `special-characters-in-path`: Handles spaces, unicode, and nested folder paths cleanly.
+
+- [ ] **Chunk 9.2: Semantic AI Multi-Branch Auto-Splitter (`src/pro/ai-splitter.ts`)**
+  - [ ] 1-Click Button: `[✨ Auto-Split into PRs]`.
+  - [ ] Analyzes AST, file paths, and import dependencies across all modified files.
+  - [ ] Uses LLM to cluster changes into 2–3 logical PR groups (e.g. backend routes vs frontend components).
+  - [ ] Previews interactive split card with checkboxes.
+  - [ ] Executes sequential branching and isolated staging via `TransactionRunner`.
+  - [ ] **Extensive Testing Suite (`test/pro/ai-splitter.test.ts`)**:
+    - [ ] `2-group-cluster`: Successfully clusters 8 backend + 6 frontend files into 2 distinct branches.
+    - [ ] `dependency-ordering`: Ensures shared utility files are grouped with their primary dependents.
+    - [ ] `single-file-boundary`: Bypasses split and informs user when changes only belong to 1 feature.
+    - [ ] `transaction-abort`: Rolls back to original working tree state if user aborts or git command fails.
+
+- [ ] **Chunk 9.3: Webview Interactive Cards**
+  - [ ] Right-click context menu on file nodes in the Virtual Timeline Tree (`Rewind File`).
+  - [ ] Auto-Split preview modal in the Branch Splitter view.
+
+---
+
+### Sprint 10: Smart AI Conflict Resolver & Private GitHub Cloud Sync
 * **Objective**: Eliminate merge conflict dread and deliver cross-device encrypted cloud backup.
 * **Status**: 📋 Backlog
-* **Tasks**:
-  - [ ] **10.1 Smart 3-Way AI Conflict Resolver (`src/pro/conflict-resolver.ts`)**: Resolves merge conflicts cleanly using semantic intent.
-  - [ ] **10.2 Encrypted Cloud Snapshot Sync (`src/pro/cloud-sync.ts`)**: AES-256 client-side encrypted packfile backup to cloud storage.
-  - [ ] **10.3 Webview 3-Way Visual Resolution Card**: Side-by-side preview with 1-click apply.
-  - [ ] **10.4 v2.0.0 Pro Packaging & Release**: Build, verification, and marketplace deployment.
+* **Milestone Version**: `v2.0.0` (GitWizard Pro Commercial Launch)
+
+#### Chunks & Trackable To-Dos:
+- [ ] **Chunk 10.1: Smart 3-Way AI Conflict Resolver (`src/pro/conflict-resolver.ts`)**
+  - [ ] Extract `BASE` common ancestor, `OURS` (local changes), and `THEIRS` (incoming changes) from Git index.
+  - [ ] Feed all 3 representations to LLM with semantic resolution prompt.
+  - [ ] Verify generated code has 0 conflict markers and passes basic syntax checks.
+  - [ ] Present visual side-by-side diff in Webview: Left (Conflict/Incoming) vs Right (AI Resolution).
+  - [ ] **Extensive Testing Suite (`test/pro/conflict-resolver.test.ts`)**:
+    - [ ] `identical-line-conflict`: Resolves overlapping edits to the same function cleanly.
+    - [ ] `import-conflict`: Merges disjoint imports from both branches into single clean import block.
+    - [ ] `deleted-vs-modified`: Resolves conflict where one branch deleted code while other edited it.
+    - [ ] `syntax-validation`: Catches hallucinated syntax and aborts before touching repository.
+    - [ ] `safety-airbag`: Restores original pre-sync state if user rejects resolution.
+
+- [ ] **Chunk 10.2: Private GitHub Cloud Sync Bridge (`src/pro/cloud-sync.ts`)**
+  - [ ] Create zero-COGS cloud backup by pushing client-side AES-256 encrypted git bundles to a private hidden orphan branch (`refs/gitwizard/cloud-sync`) on the user's existing GitHub repo.
+  - [ ] Sync snapshot metadata JSON across linked developer machines.
+  - [ ] **Extensive Testing Suite (`test/pro/cloud-sync.test.ts`)**:
+    - [ ] `encrypt-and-bundle`: Creates valid encrypted git bundle packfile.
+    - [ ] `decrypt-and-restore`: Reconstitutes snapshots on fresh mock repository.
+    - [ ] `tamper-detection`: Rejects corrupted or modified encrypted bundles.
+    - [ ] `offline-graceful`: Detects network absence and queues sync for later without blocking editor.
+
+- [ ] **Chunk 10.3: Webview 3-Way Visual Resolution Card**
+  - [ ] Interactive conflict preview card with 1-click `[Accept Resolution & Finish Sync]`.
+
+- [ ] **Chunk 10.4: v2.0.0 Packaging, Landing Page & Marketplace Launch**
+  - [ ] Package `gitwizard-2.0.0.vsix` with Pro licensing assets.
+  - [ ] Update `README.md`, `CHANGELOG.md`, and Polar.sh / LemonSqueezy store links.
+
 
 

@@ -1,7 +1,7 @@
 # 🧙‍♂️ GitWizard Pro — Product Specification & Implementation Blueprint
 
 > **Target Version**: v1.1.0 – v2.0.0  
-> **Price Point**: $9.99/month (or $99/year)  
+> **Price Point**: **$49 One-Time Lifetime License** (Launch Early Bird: **$29**, 0 Subscriptions)  
 > **Target Audience**: "Vibe Coders", AI-first developers, solo hackers, and small teams using Cursor, Claude Code, Antigravity, and Copilot.  
 > **Living Document Status**: Active Master Reference for Pro Sprints
 
@@ -164,40 +164,50 @@ graph TD
 
 ---
 
-### 3.6. Feature 6: ☁️ Encrypted Cloud Flight Recorder
+### 3.6. Feature 6: ☁️ Encrypted Cloud Flight Recorder (Private GitHub Sync)
 * **User Intent**: *"I switch between my desktop and laptop. I want my snapshot timeline everywhere, and I want an off-site backup if my disk dies."*
-* **The Executable Button**: `[☁️ Sync Snapshots to Cloud]`
+* **The Executable Button**: `[☁️ Sync Snapshots to GitHub]`
 * **Workflow Engine**:
-  1. Client-side AES-256-GCM encryption with user's private key.
+  1. Client-side AES-256-GCM encryption using user's local key.
   2. Compact packfile bundles generated via `git bundle create`.
-  3. Uploaded to secure snapshot storage (Cloudflare R2 / AWS S3).
-  4. Timeline displays snapshots taken across all linked devices with device icons (`💻 Laptop`, `🖥️ Desktop`).
+  3. Uploaded directly to a private orphan branch (`refs/gitwizard/cloud-sync`) or private Gist on the user's existing GitHub account. Zero external server dependencies.
+  4. Timeline displays snapshots taken across all linked devices with device badges (`💻 Laptop`, `🖥️ Desktop`).
 
 ---
 
 ## 4. Monetization & Licensing Architecture
 
-### Pricing
-* **Monthly**: **$9.99 / month**
-* **Annual**: **$99 / year** (saves 17%)
+### 4.1. Pricing: Pay Once, Own Forever (Zero Subscription Fatigue)
+* **Standard Lifetime License**: **$49 one-time**
+* **Early Bird Launch Special**: **$29 one-time** (first 500 copies)
 * **Free Trial**: **14-day full Pro access** with zero credit card required.
+* **License Terms**: Perpetual license for 1 developer across up to 3 machines (Mac, Windows, Linux), covering all v1.x and v2.x releases.
 
-### 4.1. Lightweight, Offline-First Cryptographic Licensing
-To avoid annoying developers with constant network requests or failing when coding offline on planes:
+### 4.2. Zero-COGS Architecture (How GitWizard Pro Stays Profitable Forever)
+Under a one-time payment model, features with recurring cloud costs can drain margins. GitWizard Pro solves this completely with a **zero-ongoing-server-cost architecture**:
+1. **AI Features via BYOK (Bring Your Own Key)**:
+   - Users provide their own API key (Google Gemini, OpenAI, Claude) or connect to local models (Ollama, LM Studio).
+   - **Cost to creator**: **$0.00**.
+   - **Benefit to user**: Complete data privacy, zero vendor lock-in, and pennies per month directly from model providers.
+2. **Cloud Snapshot Backup via Private GitHub Sync**:
+   - Rather than paying for dedicated S3/R2 storage buckets, GitWizard backs up encrypted snapshot bundles to a hidden private orphan branch (`refs/gitwizard/cloud-sync`) or private GitHub Gist in the user's existing GitHub account.
+   - **Cost to creator**: **$0.00**.
+   - **Benefit to user**: Code never touches third-party SaaS servers.
+
+### 4.3. Lightweight, Offline-First Cryptographic Licensing
+To guarantee developer privacy and allow offline coding (airplanes, bad Wi-Fi):
 
 ```mermaid
 graph LR
-    User["User Buys on Web (Stripe/Polar)"] --> LicenseKey["Generates Signed License Key (Ed25519/HMAC)"]
+    User["User Buys on Web (Polar.sh / LemonSqueezy)"] --> LicenseKey["Generates Cryptographic License Key (Ed25519/HMAC)"]
     LicenseKey --> Extension["Entered in VS Code Extension"]
-    Extension --> LocalVerifier["Local Cryptographic Verifier (Offline)"]
+    Extension --> LocalVerifier["Local Cryptographic Verifier (node:crypto)"]
     LocalVerifier --> Features["Unlocks Pro Executable Buttons"]
-    Extension -.->|Periodic 14-day check| AuthServer["Lightweight Cloud Check"]
 ```
 
-* **License Key Format**: `GWPRO-<version>-<expiryTimestamp>-<emailBase64>-<signature>`
-* **Offline Verification**: Verified locally in TypeScript using public key cryptographic verification (`node:crypto`). Works 100% offline.
-* **Grace Period**: 7-day grace period if renewal fails.
-* **Safety First**: If a license expires, **GitWizard NEVER locks users out of their code**. All Free tier safety features remain functional forever.
+* **License Key Format**: `GWPRO-LIFETIME-<emailBase64>-<issuedTimestamp>-<signature>`
+* **Offline Verification**: Verified locally in TypeScript using public key cryptographic verification (`node:crypto`). Works 100% offline without phoning home.
+* **Safety First**: If a license key is invalid or trial expires, **GitWizard NEVER locks users out of their code**. All Free tier safety features remain functional forever.
 
 ---
 
