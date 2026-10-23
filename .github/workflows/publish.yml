@@ -1,6 +1,8 @@
-name: Publish to Open VSX & VS Code Marketplace
+name: CI & Publish
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
@@ -34,6 +36,15 @@ jobs:
       - name: Package VSIX
         run: npx vsce package --no-dependencies -o gitwizard.vsix
 
+      - name: Upload VSIX Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitwizard-vsix
+          path: gitwizard.vsix
+
       # Open VSX Trusted Publishing (Zero-Token OIDC)
       - name: Publish to Open VSX Registry
+        if: github.event_name == 'release'
         run: npx ovsx publish gitwizard.vsix
+        continue-on-error: true
+
