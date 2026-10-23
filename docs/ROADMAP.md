@@ -97,3 +97,48 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] **6.11 Open Source Documentation**: Authored `CHANGELOG.md` and `CONTRIBUTING.md`.
   - [x] **6.12 Packaging & Release**: Version bumped to `1.0.0`, verified with zero TypeScript errors and packaged `gitwizard-1.0.0.vsix`.
 
+---
+
+## 🚀 GitWizard Pro ($9.99/mo) Roadmap
+
+> Full architecture, UX blueprints, and user journeys are detailed in [docs/PRO_SPECIFICATION.md](file:///c:/Users/user/Desktop/Dr_OpenSource/Projects/GitWizard/docs/PRO_SPECIFICATION.md).
+
+### Sprint 7: Pro Foundation & AI Semantic Commit/PR Generator
+* **Objective**: Build licensing gatekeeper, Pro UI badge system, and the AI Commit & Auto-PR Generator.
+* **Status**: ⏳ Ready for Development
+* **Tasks**:
+  - [ ] **7.1 Offline License Verification (`src/pro/license.ts`)**: Cryptographic Ed25519/HMAC license key verifier with 14-day zero-card trial.
+  - [ ] **7.2 Provider-Agnostic AI Service (`src/pro/ai-service.ts`)**: Unified client supporting Gemini, OpenAI, and BYOK settings.
+  - [ ] **7.3 AI Commit & PR Wizard (`src/wizards/ai-commit.ts`)**: Conventional commit generator and PR description drafter from git diffs.
+  - [ ] **7.4 Webview Pro Integration (`src/webview/App.tsx`)**: "✨ Generate with AI" button in Daily Essentials deck + License Activation modal.
+  - [ ] **7.5 Automated Test Suite (`test/pro/ai-commit.test.ts` & `test/pro/license.test.ts`)**: 100% unit test coverage for license validation and mock AI responses.
+
+### Sprint 8: Pre-Flight Secret Radar & Production Branch Guard
+* **Objective**: Protect vibe coders from catastrophic API key leaks and accidental commits to `main`.
+* **Status**: 📋 Backlog
+* **Tasks**:
+  - [ ] **8.1 High-Entropy Secret Scanner (`src/pro/secret-scanner.ts`)**: Scans diffs for OpenAI, Stripe, AWS, GitHub tokens before commit/push.
+  - [ ] **8.2 1-Click Secret Remediation (`src/pro/secret-remediation.ts`)**: Extracts hardcoded secrets to `.env` and adds to `.gitignore`.
+  - [ ] **8.3 Protected Branch Guard (`src/pro/branch-guard.ts`)**: Blocks direct commit/reset on `main` and offers 1-click feature branch creation.
+  - [ ] **8.4 Radar Webview Badge & Alert Card**: Plain-English blocker with 1-click remediation button.
+  - [ ] **8.5 Automated Test Suite (`test/pro/secret-scanner.test.ts` & `test/pro/branch-guard.test.ts`)**.
+
+### Sprint 9: Surgical Per-File Rewind & AI Auto-Split
+* **Objective**: Enable per-file surgical time travel and multi-branch AI clustering.
+* **Status**: 📋 Backlog
+* **Tasks**:
+  - [ ] **9.1 Surgical File Rewind (`src/pro/file-rewind.ts`)**: Restores single file from shadow snapshot ref without touching other modified files.
+  - [ ] **9.2 AI Multi-Branch Auto-Splitter (`src/pro/ai-splitter.ts`)**: Clusters 10+ modified files into clean PR branches via semantic analysis.
+  - [ ] **9.3 Timeline Context Menu & Auto-Split UI**: Right-click per-file rewind and 1-click auto-split approval cards.
+  - [ ] **9.4 Automated Test Suite (`test/pro/file-rewind.test.ts` & `test/pro/ai-splitter.test.ts`)**.
+
+### Sprint 10: Smart AI Conflict Resolver & Cloud Sync Bridge
+* **Objective**: Eliminate merge conflict dread and deliver cross-device encrypted cloud backup.
+* **Status**: 📋 Backlog
+* **Tasks**:
+  - [ ] **10.1 Smart 3-Way AI Conflict Resolver (`src/pro/conflict-resolver.ts`)**: Resolves merge conflicts cleanly using semantic intent.
+  - [ ] **10.2 Encrypted Cloud Snapshot Sync (`src/pro/cloud-sync.ts`)**: AES-256 client-side encrypted packfile backup to cloud storage.
+  - [ ] **10.3 Webview 3-Way Visual Resolution Card**: Side-by-side preview with 1-click apply.
+  - [ ] **10.4 v2.0.0 Pro Packaging & Release**: Build, verification, and marketplace deployment.
+
+
