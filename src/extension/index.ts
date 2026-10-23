@@ -9,6 +9,34 @@ import { UndoWizard } from '../wizards/undo';
 import { RepoSplitterWizard, SplitToNewRepoOptions } from '../wizards/publish';
 import { DailyEssentialsWizard } from '../wizards/essentials';
 import { AutoCheckpointController } from '../engine/auto-checkpoint';
+import { LicenseManager, LicenseStorage, LicenseStatus } from '../pro/license';
+import { AIService, AIProvider, AIModelConfig } from '../pro/ai-service';
+import { AICommitWizard } from '../wizards/ai-commit';
+
+class VSCodeLicenseStorage implements LicenseStorage {
+  constructor(private readonly memento: vscode.Memento) {}
+  get(key: string): string | undefined {
+    return this.memento.get<string>(key);
+  }
+  set(key: string, value: string): void {
+    this.memento.update(key, value);
+  }
+}
+
+function getActiveAIConfig(): AIModelConfig {
+  const config = vscode.workspace.getConfiguration('gitwizard');
+  const provider = (config.get<string>('aiProvider') || 'gemini') as AIProvider;
+  let apiKey = '';
+  if (provider === 'gemini') {
+    apiKey = config.get<string>('geminiApiKey') || process.env.GEMINI_API_KEY || '';
+  } else if (provider === 'openai') {
+    apiKey = config.get<string>('openaiApiKey') || process.env.OPENAI_API_KEY || '';
+  }
+  const baseUrl = config.get<string>('ollamaBaseUrl') || 'http://localhost:11434';
+  const model = config.get<string>('ollamaModel') || (provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'llama3.2');
+
+  return { provider, apiKey, baseUrl, model };
+}
 
 class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'gitwizard.sidebarView';
@@ -25,6 +53,9 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _repoSplitterWizard: RepoSplitterWizard,
     private readonly _essentialsWizard: DailyEssentialsWizard,
     private readonly _autoCheckpoint: AutoCheckpointController,
+    private readonly _licenseManager: LicenseManager,
+    private readonly _aiService: AIService,
+    private readonly _aiCommitWizard: AICommitWizard,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -46,6 +77,74 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
       switch (data.type) {
         case 'GET_STATUS': {
           await this.broadcastStatus();
+          break;
+        }
+
+        case 'GET_PRO_STATUS': {
+          const proStatus = this._licenseManager.getStatus();
+          this._view?.webview.postMessage({
+            type: 'PRO_STATUS_UPDATE',
+            proStatus
+          });
+          break;
+        }
+
+        case 'ACTIVATE_LICENSE': {
+          try {
+            const res = this._licenseManager.activateLicense(data.key || '');
+            if (res.isPro) {
+              vscode.window.showInformationMessage(`GitWizard Pro: Successfully activated for ${res.email}! 🎉`);
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Pro Activation Error: ${res.reason || 'Invalid license key'}`);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Activation Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'GENERATE_AI_COMMIT': {
+          try {
+            // Refresh AI config in case user updated settings or env
+            this._aiService.updateConfig(getActiveAIConfig());
+            const configSummary = this._aiService.getConfigSummary();
+
+            if (configSummary.provider !== 'ollama' && !configSummary.hasKey) {
+              const enteredKey = await vscode.window.showInputBox({
+                prompt: `Enter your ${configSummary.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API Key:`,
+                password: true,
+                placeHolder: configSummary.provider === 'gemini' ? 'AIzaSy...' : 'sk-...'
+              });
+              if (!enteredKey) {
+                this._view?.webview.postMessage({
+                  type: 'AI_COMMIT_RESPONSE',
+                  success: false,
+                  error: 'API key is required to generate commit messages with AI.'
+                });
+                break;
+              }
+              const settingKey = configSummary.provider === 'gemini' ? 'geminiApiKey' : 'openaiApiKey';
+              await vscode.workspace.getConfiguration('gitwizard').update(settingKey, enteredKey, vscode.ConfigurationTarget.Global);
+              this._aiService.updateConfig({ apiKey: enteredKey });
+            }
+
+            const result = await this._aiCommitWizard.generateCommitMessage();
+            this._view?.webview.postMessage({
+              type: 'AI_COMMIT_RESPONSE',
+              success: result.success,
+              commitMessage: result.commitMessage,
+              summary: result.summary,
+              error: result.error,
+              requiresPro: result.requiresPro
+            });
+          } catch (err: any) {
+            this._view?.webview.postMessage({
+              type: 'AI_COMMIT_RESPONSE',
+              success: false,
+              error: err.message
+            });
+          }
           break;
         }
 
@@ -267,13 +366,15 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
       const actions = await this._undoWizard.getRecentActions(10);
       const branchesRes = await this._git.exec(['branch', '--format=%(refname:short)'], { allowFailure: true });
       const localBranches = branchesRes.exitCode === 0 && branchesRes.stdout ? branchesRes.stdout.split('\n').filter(Boolean) : [];
+      const proStatus = this._licenseManager.getStatus();
 
       this._view?.webview.postMessage({
         type: 'STATUS_UPDATE',
         status,
         snapshots,
         actions,
-        localBranches
+        localBranches,
+        proStatus
       });
       await this._updateStatusBar();
     } catch (err) {
@@ -290,7 +391,7 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitWizard</title>
+  <title>GitWizard Pro</title>
   <style>
     body {
       padding: 10px;
@@ -336,6 +437,12 @@ export function activate(context: vscode.ExtensionContext) {
   const essentialsWizard = new DailyEssentialsWizard(git, snapshotManager);
   const autoCheckpoint = new AutoCheckpointController(git, snapshotManager);
 
+  // Pro Engines
+  const licenseStorage = new VSCodeLicenseStorage(context.globalState);
+  const licenseManager = new LicenseManager(licenseStorage);
+  const aiService = new AIService(getActiveAIConfig());
+  const aiCommitWizard = new AICommitWizard(git, aiService, licenseManager);
+
   // Status Bar Item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBarItem.command = 'gitwizard.focusSidebar';
@@ -348,11 +455,13 @@ export function activate(context: vscode.ExtensionContext) {
     try {
       const status = await git.getStatus();
       const dirtyCount = status.modified.length + status.staged.length + status.untracked.length;
+      const pro = licenseManager.getStatus();
+      const proTag = pro.isPro ? ' ⭐' : '';
       if (dirtyCount === 0) {
-        statusBarItem.text = `$(wand) ${status.branch} (clean)`;
+        statusBarItem.text = `$(wand) ${status.branch}${proTag} (clean)`;
         statusBarItem.backgroundColor = undefined;
       } else {
-        statusBarItem.text = `$(wand) ${status.branch} (${dirtyCount} dirty)`;
+        statusBarItem.text = `$(wand) ${status.branch}${proTag} (${dirtyCount} dirty)`;
         statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
       }
     } catch {
@@ -371,6 +480,9 @@ export function activate(context: vscode.ExtensionContext) {
     repoSplitterWizard,
     essentialsWizard,
     autoCheckpoint,
+    licenseManager,
+    aiService,
+    aiCommitWizard,
     updateStatusBar
   );
 
@@ -390,6 +502,89 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.focusSidebar', async () => {
       await vscode.commands.executeCommand('gitwizard.sidebarView.focus');
+    })
+  );
+
+  // Pro: Generate AI Commit Message Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.generateAICommit', async () => {
+      aiService.updateConfig(getActiveAIConfig());
+      const res = await aiCommitWizard.generateCommitMessage();
+      if (res.success && res.commitMessage) {
+        const action = await vscode.window.showInformationMessage(
+          `AI Commit: "${res.commitMessage}"`,
+          'Commit Now',
+          'Copy Message'
+        );
+        if (action === 'Commit Now') {
+          await essentialsWizard.safeCommit(res.commitMessage);
+          provider.broadcastStatus();
+        } else if (action === 'Copy Message') {
+          await vscode.env.clipboard.writeText(res.commitMessage);
+          vscode.window.showInformationMessage('GitWizard: Commit message copied to clipboard!');
+        }
+      } else if (res.requiresPro) {
+        const activate = await vscode.window.showWarningMessage(
+          res.error || 'GitWizard Pro required.',
+          'Activate License'
+        );
+        if (activate === 'Activate License') {
+          await vscode.commands.executeCommand('gitwizard.activateLicense');
+        }
+      } else {
+        vscode.window.showErrorMessage(`GitWizard AI Error: ${res.error}`);
+      }
+    })
+  );
+
+  // Pro: Activate License Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.activateLicense', async () => {
+      const key = await vscode.window.showInputBox({
+        prompt: 'Enter your GitWizard Pro Lifetime License Key:',
+        placeHolder: 'GWPRO-LIFETIME.<email>.<time>.<sig>'
+      });
+      if (key) {
+        const res = licenseManager.activateLicense(key);
+        if (res.isPro) {
+          vscode.window.showInformationMessage(`GitWizard Pro: Activated for ${res.email}! Thank you! 🎉`);
+          provider.broadcastStatus();
+        } else {
+          vscode.window.showErrorMessage(`GitWizard Pro: ${res.reason || 'Invalid license key'}`);
+        }
+      }
+    })
+  );
+
+  // Pro: Configure AI Provider & API Key Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.configureAI', async () => {
+      const providerPick = await vscode.window.showQuickPick(
+        [
+          { label: 'Google Gemini', description: 'Fast, high-quality, free-tier available', value: 'gemini' },
+          { label: 'OpenAI (gpt-4o-mini)', description: 'Industry standard reasoning', value: 'openai' },
+          { label: 'Local Ollama', description: '100% offline, zero API keys required', value: 'ollama' }
+        ],
+        { placeHolder: 'Select your preferred AI provider for GitWizard Pro:' }
+      );
+      if (!providerPick) return;
+
+      const config = vscode.workspace.getConfiguration('gitwizard');
+      await config.update('aiProvider', providerPick.value, vscode.ConfigurationTarget.Global);
+
+      if (providerPick.value !== 'ollama') {
+        const key = await vscode.window.showInputBox({
+          prompt: `Enter API key for ${providerPick.label}:`,
+          password: true
+        });
+        if (key) {
+          const setting = providerPick.value === 'gemini' ? 'geminiApiKey' : 'openaiApiKey';
+          await config.update(setting, key, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(`GitWizard: Configured ${providerPick.label} successfully!`);
+        }
+      } else {
+        vscode.window.showInformationMessage(`GitWizard: Local Ollama configured at http://localhost:11434.`);
+      }
     })
   );
 

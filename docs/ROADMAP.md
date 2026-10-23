@@ -111,52 +111,53 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 
 ### Sprint 7: Pro Foundation, Offline Cryptographic Licensing & AI Semantic Commit/PR Generator
 * **Objective**: Build the offline cryptographic licensing engine (14-day zero-card trial) and the #1 daily vibe-coder superpower: AI-generated conventional commits and PR summaries.
-* **Status**: ⏳ Ready for Development
+* **Status**: Completed & Verified (74/74 unit tests passing across 13 test suites)
 * **Milestone Version**: `v1.1.0`
 
 #### Chunks & Trackable To-Dos:
-- [ ] **Chunk 7.1: Cryptographic Offline License Engine (`src/pro/license.ts`)**
-  - [ ] Implement Ed25519 / HMAC-SHA256 signature verification in Node.js `crypto`.
-  - [ ] Implement format parser: `GWPRO-LIFETIME-<emailBase64>-<issuedTimestamp>-<signature>`.
-  - [ ] Implement 14-day local trial with tamper-resistant local state in VS Code GlobalState.
-  - [ ] Implement graceful fallback: If license is invalid or trial expires, Free Tier remains 100% active; NEVER lock user out of repositories.
-  - [ ] **Extensive Testing Suite (`test/pro/license.test.ts`)**:
-    - [ ] `valid-license`: Successfully verifies authentic signed key.
-    - [ ] `tampered-key`: Rejects modified payload or corrupted signature.
-    - [ ] `trial-active`: Reports active trial with remaining days calculated correctly.
-    - [ ] `trial-expired`: Reports expired trial and falls back to Free tier without throwing errors.
-    - [ ] `clock-rollback`: Detects local system clock manipulation attempt.
-    - [ ] `empty-and-malformed`: Rejects arbitrary strings, whitespace, or invalid base64.
+- [x] **Chunk 7.1: Cryptographic Offline License Engine (`src/pro/license.ts`)**
+  - [x] Implement Ed25519 / HMAC-SHA256 signature verification in Node.js `crypto`.
+  - [x] Implement format parser: `GWPRO-LIFETIME.<emailBase64>.<issuedTimestamp>.<signature>`.
+  - [x] Implement 14-day local trial with tamper-resistant local state in VS Code GlobalState.
+  - [x] Implement graceful fallback: If license is invalid or trial expires, Free Tier remains 100% active; NEVER lock user out of repositories.
+  - [x] **Extensive Testing Suite (`test/pro/license.test.ts`)**:
+    - [x] `valid-license`: Successfully verifies authentic signed key.
+    - [x] `tampered-key`: Rejects modified payload or corrupted signature.
+    - [x] `trial-active`: Reports active trial with remaining days calculated correctly.
+    - [x] `trial-expired`: Reports expired trial and falls back to Free tier without throwing errors.
+    - [x] `clock-rollback`: Detects local system clock manipulation attempt.
+    - [x] `empty-and-malformed`: Rejects arbitrary strings, whitespace, or invalid base64.
 
-- [ ] **Chunk 7.2: Provider-Agnostic AI Service (`src/pro/ai-service.ts`)**
-  - [ ] Create unified `AIService` interface with support for Google Gemini, OpenAI (`gpt-4o-mini`), and local Ollama.
-  - [ ] Store API keys securely in VS Code `SecretStorage`.
-  - [ ] Implement token estimation and automatic diff truncation (>12,000 tokens trimmed cleanly).
-  - [ ] Filter out lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) and binary assets from diff prompts.
-  - [ ] **Extensive Testing Suite (`test/pro/ai-service.test.ts`)**:
-    - [ ] `gemini-provider`: Successful prompt and response formatting.
-    - [ ] `openai-provider`: Successful prompt and response formatting.
-    - [ ] `ollama-local`: Fallback to local HTTP endpoint when offline.
-    - [ ] `missing-api-key`: Friendly error prompting user to enter key in settings.
-    - [ ] `rate-limit-429`: Automatic exponential backoff retry.
-    - [ ] `diff-pruning`: Correctly strips 50,000-line lockfiles while preserving code diffs.
+- [x] **Chunk 7.2: Provider-Agnostic AI Service (`src/pro/ai-service.ts`)**
+  - [x] Create unified `AIService` interface with support for Google Gemini, OpenAI (`gpt-4o-mini`), and local Ollama.
+  - [x] Store API keys securely in VS Code `SecretStorage` / configuration.
+  - [x] Implement token estimation and automatic diff truncation (>12,000 tokens trimmed cleanly).
+  - [x] Filter out lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) and binary assets from diff prompts.
+  - [x] **Extensive Testing Suite (`test/pro/ai-service.test.ts`)**:
+    - [x] `gemini-provider`: Successful prompt and response formatting.
+    - [x] `openai-provider`: Successful prompt and response formatting.
+    - [x] `ollama-local`: Fallback to local HTTP endpoint when offline.
+    - [x] `missing-api-key`: Friendly error prompting user to enter key in settings.
+    - [x] `rate-limit-429`: Automatic exponential backoff retry.
+    - [x] `diff-pruning`: Correctly strips 50,000-line lockfiles while preserving code diffs.
 
-- [ ] **Chunk 7.3: AI Semantic Conventional Commit & PR Generator (`src/wizards/ai-commit.ts`)**
-  - [ ] Create `AICommitWizard` analyzing staged + unstaged diffs.
-  - [ ] Enforce conventional commit output format: `type(scope): summary` + bulleted changes.
-  - [ ] Generate structured PR description: `Problem`, `Solution`, `Impact`, `Testing`.
-  - [ ] **Extensive Testing Suite (`test/wizards/ai-commit.test.ts`)**:
-    - [ ] `single-file-commit`: Generates concise semantic message for single-file diff.
-    - [ ] `multi-file-commit`: Accurately groups multi-file changes under correct scope.
-    - [ ] `empty-diff`: Gracefully warns user when workspace is clean.
-    - [ ] `untracked-files`: Reads content of new untracked files into diff context.
-    - [ ] `malformed-llm-response`: Fallbacks gracefully to fallback message if LLM returns garbage.
+- [x] **Chunk 7.3: AI Semantic Conventional Commit & PR Generator (`src/wizards/ai-commit.ts`)**
+  - [x] Create `AICommitWizard` analyzing staged + unstaged diffs.
+  - [x] Enforce conventional commit output format: `type(scope): summary` + bulleted changes.
+  - [x] Generate structured PR description: `Problem`, `Solution`, `Impact`, `Testing`.
+  - [x] **Extensive Testing Suite (`test/wizards/ai-commit.test.ts`)**:
+    - [x] `single-file-commit`: Generates concise semantic message for single-file diff.
+    - [x] `multi-file-commit`: Accurately groups multi-file changes under correct scope.
+    - [x] `empty-diff`: Gracefully warns user when workspace is clean.
+    - [x] `untracked-files`: Reads content of new untracked files into diff context.
+    - [x] `malformed-llm-response`: Fallbacks gracefully to fallback message if LLM returns garbage.
 
-- [ ] **Chunk 7.4: Webview UI Integration (`src/webview/App.tsx`)**
-  - [ ] Add `[✨ Generate with AI]` button in the Daily Essentials Commit Card.
-  - [ ] Add editable preview textarea so the user can tweak the generated commit message before saving.
-  - [ ] Add Pro Status indicator badge in sidebar header with "Activate License" modal.
-  - [ ] Add loading spinner and error alert banner for AI generation.
+- [x] **Chunk 7.4: Webview UI Integration (`src/webview/App.tsx` & `src/extension/index.ts`)**
+  - [x] Add `[✨ AI Message]` button in the Daily Essentials Commit Card.
+  - [x] Add editable preview textarea so the user can tweak the generated commit message before saving.
+  - [x] Add Pro Status indicator badge in sidebar header with "Activate License" modal.
+  - [x] Add loading spinner and error alert banner for AI generation.
+  - [x] Registered `gitwizard.generateAICommit`, `gitwizard.activateLicense`, and `gitwizard.configureAI` commands.
 
 ---
 

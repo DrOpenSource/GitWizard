@@ -41,6 +41,15 @@ export interface HumanGitAction {
   timestamp: string;
 }
 
+export interface LicenseStatus {
+  isPro: boolean;
+  tier: 'pro' | 'free';
+  status: 'active_license' | 'active_trial' | 'expired_trial' | 'free';
+  email?: string;
+  trialDaysRemaining?: number;
+  reason?: string;
+}
+
 interface ConfirmModalData {
   title: string;
   description: string;
@@ -55,6 +64,14 @@ export const App: React.FC = () => {
   const [actions, setActions] = useState<HumanGitAction[]>([]);
   const [localBranches, setLocalBranches] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'daily' | 'timeline' | 'split' | 'promote'>('daily');
+
+  // Pro State
+  const [proStatus, setProStatus] = useState<LicenseStatus | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
+  const [licenseKeyInput, setLicenseKeyInput] = useState('');
+  const [licenseFeedback, setLicenseFeedback] = useState<{ text: string; isError?: boolean } | null>(null);
 
   // Everyday state
   const [commitMessage, setCommitMessage] = useState('');
@@ -91,6 +108,20 @@ export const App: React.FC = () => {
             setSelectedBranch(data.status.branch);
           }
         }
+        if (data.proStatus) setProStatus(data.proStatus);
+      } else if (data.type === 'PRO_STATUS_UPDATE') {
+        setProStatus(data.proStatus);
+      } else if (data.type === 'AI_COMMIT_RESPONSE') {
+        setIsGeneratingAI(false);
+        if (data.success && data.commitMessage) {
+          setCommitMessage(data.commitMessage);
+          setAiError(null);
+        } else if (data.requiresPro) {
+          setShowLicenseModal(true);
+          setAiError(data.error || 'Pro license or active trial required.');
+        } else {
+          setAiError(data.error || 'Failed to generate commit message.');
+        }
       }
     };
 
@@ -101,6 +132,28 @@ export const App: React.FC = () => {
   const allDirtyFiles = status
     ? Array.from(new Set([...status.staged, ...status.modified, ...status.untracked]))
     : [];
+
+  // Pro Handlers
+  const handleGenerateAICommit = () => {
+    setIsGeneratingAI(true);
+    setAiError(null);
+    vscode.postMessage({ type: 'GENERATE_AI_COMMIT' });
+  };
+
+  const handleActivateLicense = () => {
+    if (!licenseKeyInput.trim()) {
+      setLicenseFeedback({ text: 'Please enter a valid license key.', isError: true });
+      return;
+    }
+    vscode.postMessage({
+      type: 'ACTIVATE_LICENSE',
+      key: licenseKeyInput.trim()
+    });
+    setLicenseFeedback({ text: 'Validating key...', isError: false });
+    setTimeout(() => {
+      vscode.postMessage({ type: 'GET_PRO_STATUS' });
+    }, 500);
+  };
 
   // Plain-English Handlers
   const handleQuickCommit = () => {
@@ -376,6 +429,223 @@ export const App: React.FC = () => {
         </div>
       )}
 
+      {/* License Activation Modal */}
+      {showLicenseModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #6366f1',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '360px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(99,102,241,0.3)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>⭐</span> GitWizard Pro License
+              </div>
+              <button
+                onClick={() => {
+                  setShowLicenseModal(false);
+                  setLicenseFeedback(null);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--vscode-foreground)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  opacity: 0.7
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: '1.4' }}>
+              One-time $49 payment ($29 Early Bird launch). 0 subscriptions. Forever yours.
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.04)',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}
+            >
+              <div style={{ fontWeight: 600, color: '#a5b4fc' }}>Current Tier:</div>
+              {proStatus?.status === 'active_license' && (
+                <div style={{ color: '#34d399' }}>✅ Lifetime License active for: {proStatus.email}</div>
+              )}
+              {proStatus?.status === 'active_trial' && (
+                <div style={{ color: '#60a5fa' }}>✨ 14-Day Free Trial active ({proStatus.trialDaysRemaining ?? 14} days remaining)</div>
+              )}
+              {proStatus?.status === 'expired_trial' && (
+                <div style={{ color: '#f87171' }}>⏳ Trial has expired. Enter key to continue using Pro features.</div>
+              )}
+              {(!proStatus || proStatus.status === 'free') && (
+                <div style={{ color: '#94a3b8' }}>Free Tier (Standard safety checkpoints active)</div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600 }}>Enter Lifetime License Key:</div>
+              <input
+                type="text"
+                placeholder="GWPRO-LIFETIME.<email>.<time>.<sig>"
+                value={licenseKeyInput}
+                onChange={(e) => setLicenseKeyInput(e.target.value)}
+                style={{
+                  padding: '7px 8px',
+                  background: 'var(--vscode-input-background)',
+                  color: 'var(--vscode-input-foreground)',
+                  border: '1px solid var(--vscode-input-border)',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace'
+                }}
+              />
+              {licenseFeedback && (
+                <div style={{ fontSize: '10px', color: licenseFeedback.isError ? '#f87171' : '#34d399' }}>
+                  {licenseFeedback.text}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button
+                onClick={() => {
+                  setShowLicenseModal(false);
+                  setLicenseFeedback(null);
+                }}
+                style={{
+                  padding: '6px 12px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleActivateLicense}
+                style={{
+                  padding: '6px 14px',
+                  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Activate Key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pro Badge & Brand Banner */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'rgba(255, 255, 255, 0.03)',
+          padding: '6px 10px',
+          borderRadius: '6px',
+          border: '1px solid rgba(255, 255, 255, 0.06)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '13px' }}>🧙</span>
+          <span style={{ fontWeight: 700, fontSize: '11px', letterSpacing: '0.6px', color: 'var(--vscode-foreground)' }}>
+            GITWIZARD
+          </span>
+        </div>
+        <div>
+          {proStatus?.status === 'active_license' ? (
+            <span
+              onClick={() => setShowLicenseModal(true)}
+              style={{
+                fontSize: '10px',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                color: '#fff',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 0 10px rgba(16,185,129,0.3)'
+              }}
+              title={`Licensed to ${proStatus.email || 'you'}. Click to manage.`}
+            >
+              ⭐ PRO ACTIVE
+            </span>
+          ) : proStatus?.status === 'active_trial' ? (
+            <span
+              onClick={() => setShowLicenseModal(true)}
+              style={{
+                fontSize: '10px',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+                color: '#fff',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="14-Day Free Pro Trial. Click to enter key."
+            >
+              ✨ PRO TRIAL ({proStatus.trialDaysRemaining ?? 14}d left)
+            </span>
+          ) : (
+            <button
+              onClick={() => setShowLicenseModal(true)}
+              style={{
+                fontSize: '10px',
+                padding: '3px 8px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              ⚡ UPGRADE PRO ($29)
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Top Status Card */}
       <div
         style={{
@@ -461,18 +731,68 @@ export const App: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Section: Save changes (Commit) */}
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '4px' }}>
-              💾 Save Changes (Commit)
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <div style={{ fontWeight: 600, fontSize: '12px' }}>
+                💾 Save Changes (Commit)
+              </div>
+              <button
+                onClick={handleGenerateAICommit}
+                disabled={isGeneratingAI || allDirtyFiles.length === 0}
+                style={{
+                  fontSize: '10px',
+                  padding: '3px 8px',
+                  background: isGeneratingAI
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: isGeneratingAI || allDirtyFiles.length === 0 ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: '0 2px 6px rgba(99,102,241,0.25)'
+                }}
+                title="Generate semantic conventional commit message from working tree diff"
+              >
+                {isGeneratingAI ? '✨ Analyzing diff...' : '✨ AI Message'}
+              </button>
             </div>
             <div style={{ fontSize: '11px', opacity: 0.75, marginBottom: '6px' }}>
               Stage and save your work safely with a message.
             </div>
-            <input
-              type="text"
-              placeholder="e.g. Added login button & responsive styling"
+
+            {aiError && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid #ef4444',
+                  color: '#fca5a5',
+                  padding: '6px 8px',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  marginBottom: '6px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+              >
+                <span>{aiError}</span>
+                <span
+                  onClick={() => setAiError(null)}
+                  style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: '6px' }}
+                >
+                  ✕
+                </span>
+              </div>
+            )}
+
+            <textarea
+              rows={2}
+              placeholder="e.g. feat(auth): add OAuth provider & error boundary"
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleQuickCommit()}
               style={{
                 width: '100%',
                 padding: '6px 8px',
@@ -481,8 +801,10 @@ export const App: React.FC = () => {
                 border: '1px solid var(--vscode-input-border)',
                 borderRadius: '4px',
                 fontSize: '11px',
+                fontFamily: 'inherit',
                 boxSizing: 'border-box',
-                marginBottom: '6px'
+                marginBottom: '6px',
+                resize: 'vertical'
               }}
             />
             <button

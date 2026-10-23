@@ -93,8 +93,54 @@
         "command": "gitwizard.pushMain",
         "title": "GitWizard: Push Main to Origin",
         "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.generateAICommit",
+        "title": "GitWizard Pro: Generate AI Commit Message",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.activateLicense",
+        "title": "GitWizard Pro: Activate Lifetime License",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.configureAI",
+        "title": "GitWizard Pro: Configure AI Provider & Key",
+        "category": "GitWizard"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "GitWizard Pro",
+      "properties": {
+        "gitwizard.aiProvider": {
+          "type": "string",
+          "enum": ["gemini", "openai", "ollama"],
+          "default": "gemini",
+          "description": "AI provider for semantic commits and summaries."
+        },
+        "gitwizard.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API key for GitWizard Pro AI features."
+        },
+        "gitwizard.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key for GitWizard Pro AI features."
+        },
+        "gitwizard.ollamaBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL for local Ollama endpoint."
+        },
+        "gitwizard.ollamaModel": {
+          "type": "string",
+          "default": "llama3.2",
+          "description": "Model tag for local Ollama instance."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
