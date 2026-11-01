@@ -17,6 +17,7 @@ export interface GitExecResult {
 }
 
 export interface GitRepoStatus {
+  isRepo?: boolean;
   branch: string;
   isClean: boolean;
   staged: string[];
@@ -79,6 +80,57 @@ export class GitClient {
   }
 
   /**
+   * Check whether the repoPath is a valid git repository (without throwing)
+   */
+  async isRepo(): Promise<boolean> {
+    try {
+      const res = await this.exec(['rev-parse', '--is-inside-work-tree'], { allowFailure: true, timeoutMs: 5000 });
+      return res.exitCode === 0 && res.stdout.trim() === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Initialize a new Git repository safely with an initial branch (e.g. main)
+   */
+  async initRepo(defaultBranch: string = 'main'): Promise<GitExecResult> {
+    const initRes = await this.exec(['init', '-b', defaultBranch], { allowFailure: true });
+    if (initRes.exitCode === 0) {
+      return initRes;
+    }
+    // Fallback for older git versions that don't support -b
+    const fallbackRes = await this.exec(['init'], { allowFailure: true });
+    if (fallbackRes.exitCode === 0) {
+      await this.exec(['checkout', '-b', defaultBranch], { allowFailure: true });
+    }
+    return fallbackRes;
+  }
+
+  /**
+   * Check configured Git author identity (user.name and user.email)
+   */
+  async getAuthorIdentity(): Promise<{ name?: string; email?: string; isComplete: boolean }> {
+    const nameRes = await this.exec(['config', 'user.name'], { allowFailure: true });
+    const emailRes = await this.exec(['config', 'user.email'], { allowFailure: true });
+    const name = nameRes.exitCode === 0 && nameRes.stdout.trim() ? nameRes.stdout.trim() : undefined;
+    const email = emailRes.exitCode === 0 && emailRes.stdout.trim() ? emailRes.stdout.trim() : undefined;
+    return {
+      name,
+      email,
+      isComplete: Boolean(name && email)
+    };
+  }
+
+  /**
+   * Set local Git author identity in .git/config
+   */
+  async setLocalAuthorIdentity(name: string, email: string): Promise<void> {
+    await this.exec(['config', 'user.name', name.trim()]);
+    await this.exec(['config', 'user.email', email.trim()]);
+  }
+
+  /**
    * Get current branch name (works even in unborn/clean repositories without commits)
    */
   async getCurrentBranch(): Promise<string> {
@@ -117,6 +169,21 @@ export class GitClient {
    * Detailed repository status
    */
   async getStatus(): Promise<GitRepoStatus> {
+    const isInside = await this.isRepo();
+    if (!isInside) {
+      return {
+        isRepo: false,
+        branch: '',
+        isClean: true,
+        staged: [],
+        modified: [],
+        untracked: [],
+        conflicted: [],
+        inMerge: false,
+        inRebase: false
+      };
+    }
+
     const branch = await this.getCurrentBranch();
     const { inMerge, inRebase } = await this.checkMidOperationState();
 
@@ -152,6 +219,7 @@ export class GitClient {
     const isClean = staged.length === 0 && modified.length === 0 && untracked.length === 0 && conflicted.length === 0;
 
     return {
+      isRepo: true,
       branch,
       isClean,
       staged,

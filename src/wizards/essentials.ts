@@ -13,6 +13,8 @@ import path from 'node:path';
 export interface SafeCommitOptions {
   allowProtected?: boolean;
   ignoreSecrets?: boolean;
+  authorName?: string;
+  authorEmail?: string;
 }
 
 export interface EssentialResult {
@@ -24,6 +26,9 @@ export interface EssentialResult {
   suggestedFeatureBranch?: string;
   hasSecrets?: boolean;
   secrets?: DetectedSecret[];
+  requiresIdentity?: boolean;
+  needsInit?: boolean;
+  requiresRemote?: boolean;
 }
 
 export class DailyEssentialsWizard {
@@ -55,12 +60,34 @@ export class DailyEssentialsWizard {
     }
 
     const status = await this.git.getStatus();
+    if (status.isRepo === false) {
+      return {
+        success: false,
+        needsInit: true,
+        message: 'Git is not initialized in this project yet. Please enable Safe Mode first.'
+      };
+    }
+
     const dirtyCount = status.modified.length + status.staged.length + status.untracked.length;
     if (dirtyCount === 0) {
       return {
         success: false,
         message: 'No changes to commit. Your workspace is completely clean!'
       };
+    }
+
+    // 0. Pre-Flight Author Identity check
+    if (options.authorName && options.authorEmail) {
+      await this.git.setLocalAuthorIdentity(options.authorName, options.authorEmail);
+    } else {
+      const identity = await this.git.getAuthorIdentity();
+      if (!identity.isComplete) {
+        return {
+          success: false,
+          requiresIdentity: true,
+          message: 'Git requires a display name and email to save your work history.'
+        };
+      }
     }
 
     // 1. Production Branch Guard check
@@ -96,7 +123,22 @@ export class DailyEssentialsWizard {
     await this.git.exec(['add', '-A']);
 
     // Commit
-    const res = await this.git.exec(['commit', '-m', trimmed]);
+    const res = await this.git.exec(['commit', '-m', trimmed], { allowFailure: true });
+    if (res.exitCode !== 0) {
+      if (
+        res.stderr.includes('empty ident name') ||
+        res.stderr.includes('tell me who you are') ||
+        res.stderr.includes('auto-detect')
+      ) {
+        return {
+          success: false,
+          requiresIdentity: true,
+          message: 'Please provide a display name and email for your project saves.'
+        };
+      }
+      throw new Error(`Git commit failed: ${res.stderr || res.stdout}`);
+    }
+
     const headRes = await this.git.exec(['rev-parse', '--short', 'HEAD'], { allowFailure: true });
     const shortSha = headRes.stdout ? headRes.stdout.trim() : 'HEAD';
 
@@ -160,12 +202,48 @@ export class DailyEssentialsWizard {
   }
 
   /**
+   * Check if a remote origin exists in repository configuration
+   */
+  async hasRemote(remote: string = 'origin'): Promise<boolean> {
+    const res = await this.git.exec(['remote'], { allowFailure: true });
+    if (res.exitCode !== 0 || !res.stdout) return false;
+    const remotes = res.stdout.split('\n').map(r => r.trim()).filter(Boolean);
+    return remotes.includes(remote);
+  }
+
+  /**
+   * Configure or update remote URL for cloud sync
+   */
+  async setRemoteUrl(url: string, remote: string = 'origin'): Promise<{ success: boolean; message: string }> {
+    const cleanUrl = url.trim();
+    if (!cleanUrl) {
+      return { success: false, message: 'Repository URL cannot be empty.' };
+    }
+    const exists = await this.hasRemote(remote);
+    const cmd = exists ? ['remote', 'set-url', remote, cleanUrl] : ['remote', 'add', remote, cleanUrl];
+    const res = await this.git.exec(cmd, { allowFailure: true });
+    if (res.exitCode !== 0) {
+      return { success: false, message: res.stderr || 'Failed to configure remote URL.' };
+    }
+    return { success: true, message: `Connected to ${cleanUrl} successfully.` };
+  }
+
+  /**
    * Safe Push: Sends current branch to remote origin with automatic upstream tracking.
    */
   async safePush(remote: string = 'origin'): Promise<EssentialResult> {
     const branch = await this.git.getCurrentBranch();
     if (branch === 'HEAD (detached)') {
       throw new Error('Cannot push in detached HEAD state. Please switch to a branch first.');
+    }
+
+    const remoteExists = await this.hasRemote(remote);
+    if (!remoteExists) {
+      return {
+        success: false,
+        requiresRemote: true,
+        message: `Remote '${remote}' is not configured yet. Link your GitHub repository URL to enable cloud backup.`
+      };
     }
 
     // Attempt push with upstream tracking
@@ -191,6 +269,15 @@ export class DailyEssentialsWizard {
     const branch = await this.git.getCurrentBranch();
     if (branch === 'HEAD (detached)') {
       throw new Error('Cannot pull in detached HEAD state.');
+    }
+
+    const remoteExists = await this.hasRemote(remote);
+    if (!remoteExists) {
+      return {
+        success: false,
+        requiresRemote: true,
+        message: `Remote '${remote}' is not configured yet. Link your GitHub repository URL to get updates.`
+      };
     }
 
     // 1. Take safety snapshot of current state

@@ -18,12 +18,14 @@ export interface SplitToNewRepoOptions {
 
 export interface SplitToNewRepoResult {
   success: boolean;
-  repoUrl: string;
+  repoUrl?: string;
   sourceBranch: string;
   targetBranch: string;
   message: string;
   snapshot: SnapshotMetadata;
   error?: string;
+  missingGhCli?: boolean;
+  webFallbackUrl?: string;
 }
 
 export class RepoSplitterWizard {
@@ -35,6 +37,33 @@ export class RepoSplitterWizard {
     this.git = git;
     this.snapshotManager = snapshotManager;
     this.runner = runner;
+  }
+
+  /**
+   * Check if GitHub CLI (gh) is available in PATH
+   */
+  async isGhCliAvailable(): Promise<boolean> {
+    try {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const execFileAsync = promisify(execFile);
+      await execFileAsync('gh', ['--version']);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Generate 1-click web fallback URL for creating a GitHub repo in browser
+   */
+  getWebFallbackUrl(repoName: string, description?: string): string {
+    const params = new URLSearchParams();
+    params.set('name', repoName);
+    if (description) {
+      params.set('description', description);
+    }
+    return `https://github.com/new?${params.toString()}`;
   }
 
   /**
@@ -64,8 +93,22 @@ export class RepoSplitterWizard {
     try {
       // 3. If no custom remote URL provided, use GitHub CLI (gh) to create the repo
       if (!remoteUrl) {
-        // Test gh availability
-        const ghCheck = await this.git.exec(['--version']); // base check
+        const ghAvailable = await this.isGhCliAvailable();
+        if (!ghAvailable) {
+          const webFallbackUrl = this.getWebFallbackUrl(newRepoName, description);
+          return {
+            success: false,
+            missingGhCli: true,
+            webFallbackUrl,
+            repoUrl: '',
+            sourceBranch,
+            targetBranch,
+            snapshot,
+            message: `GitHub CLI (gh) was not detected. Create "${newRepoName}" on GitHub in 1-click using your browser, then link its URL.`,
+            error: 'GitHub CLI not found'
+          };
+        }
+
         try {
           const { execFile } = await import('node:child_process');
           const { promisify } = await import('node:util');
@@ -91,7 +134,18 @@ export class RepoSplitterWizard {
           );
           remoteUrl = `${viewRes.stdout.trim()}.git`;
         } catch (ghErr: any) {
-          throw new Error(`GitHub CLI repository creation failed: ${ghErr.message}`);
+          const webFallbackUrl = this.getWebFallbackUrl(newRepoName, description);
+          return {
+            success: false,
+            missingGhCli: true,
+            webFallbackUrl,
+            repoUrl: '',
+            sourceBranch,
+            targetBranch,
+            snapshot,
+            message: `GitHub CLI error: ${ghErr.message}. You can create the repository directly in your browser.`,
+            error: ghErr.message
+          };
         }
       }
 

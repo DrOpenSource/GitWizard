@@ -20,6 +20,13 @@ export interface AIPromptOptions {
   fetchFn?: typeof fetch; // Injectable fetch for isolated testing
 }
 
+export interface AITestConnectionOptions extends AIPromptOptions {
+  provider?: AIProvider;
+  apiKey?: string;
+  baseUrl?: string;
+  model?: string;
+}
+
 export interface AIResponse {
   success: boolean;
   content: string;
@@ -101,6 +108,42 @@ export class AIService {
     }
 
     return combined;
+  }
+
+  /**
+   * Test active connection with a minimal prompt
+   */
+  async testConnection(options: AITestConnectionOptions = {}): Promise<{ success: boolean; message: string }> {
+    const provider = options.provider || this.config.provider;
+    const apiKey = options.apiKey !== undefined ? options.apiKey : (this.config.apiKey || '');
+    const baseUrl = options.baseUrl || this.config.baseUrl;
+    const model = options.model || this.config.model;
+
+    if (provider !== 'ollama' && (!apiKey || !apiKey.trim())) {
+      return {
+        success: false,
+        message: `Please enter an API key for ${provider.toUpperCase()}.`
+      };
+    }
+
+    const testService = new AIService({
+      provider,
+      apiKey,
+      baseUrl,
+      model
+    });
+
+    const res = await testService.generateCompletion('Respond with: OK', { ...options, maxTokens: 10 });
+    if (res.success) {
+      return {
+        success: true,
+        message: `Connected successfully to ${res.provider.toUpperCase()} (${res.model})! ✨`
+      };
+    }
+    return {
+      success: false,
+      message: res.error || 'Connection test failed. Please check your API key or network.'
+    };
   }
 
   /**

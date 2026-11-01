@@ -1,123 +1,95 @@
-# 🧙‍♂️ GitWizard — Safe Git for Vibe Coders
+# 🧙‍♂️ GitWizard — The Undo Button for AI Coders
 
-> **Zero data loss. Zero cryptic Git errors. Full speed AI development.**
-
-**GitWizard** is an intent-based Git safety and orchestration extension for **VS Code**, **Cursor**, and **Antigravity**. It bridges the gap between conversational AI development ("vibe coding") and Git by turning complex Git operations into safe, intent-driven visual workflows.
-
----
-
-## ⚡ Why GitWizard?
-
-Vibe coders move fast, iterate conversationally, and ask AI models to generate code across dozens of files at once. But Git was designed for clean DAG topologies and manual staging.
-
-When things go wrong—such as messy working trees, accidental merge conflicts, or catastrophic `git reset --hard` mistakes—traditional Git strands you in a broken state.
-
-**GitWizard gives you an unbreakable safety net:**
-* **Never lose uncommitted work**: Automatic shadow checkpoints before every transaction.
-* **Instant conflict abort**: If remote sync conflicts, GitWizard aborts immediately and restores your workspace to the exact millisecond before the command ran.
-* **Human-friendly undo**: Reflog events translated into plain English with 1-click rollback.
+> **Never lose code, leak API keys, or fight with Git again.**  
+> The calm, zero-jargon flight recorder built for **Cursor**, **Claude**, **Antigravity**, and **VS Code**.
 
 ---
 
-## 🌟 Core Features (Free Tier)
+## ⚡ The Problem Every AI Coder Faces
 
-### 1. ⚡ Daily Essentials (The Calm Git Deck)
-* **Save My Work (Commit)**: 1-click stage and commit with clear English descriptions.
-* **Send & Update (Push & Safe Pull)**: 1-click push with upstream tracking, plus conflict-shielded safe pulling that auto-aborts and restores if remote changes collide.
-* **Branch Management**: Quick branch switcher and one-click new branch creator.
-* **Undo Last Commit (Uncommit)**: Soft undo moving `HEAD` back while keeping 100% of your modified code right in your editor.
+When you code with AI, you move fast:
+1. You ask an AI to *"add a modern login screen and connect to Stripe"*.
+2. The AI edits 15 files across your frontend and backend all at once.
+3. Suddenly, your app won't start, your layout breaks, or your private API key is sitting in plain text in your code.
 
-### 2. ⏳ Virtual Timeline Tree & Passive Flight Recorder
-* **Zero-Effort Auto-Saves**: Passively records debounced shadow snapshots before AI prompt sessions mutate code.
-* **Retrospective Time Machine**: Chronological visual tree of auto-saves, manual checkpoints, and commits.
-* **1-Click Rewind**: Instant restoration with automatic pre-restore safety backups.
+Traditional Git wasn't designed for this. It hits you with cryptic terminal errors: `fatal: empty ident name (code 128)`, `HEAD@{0}`, `merge conflict markers`, or pushes that overwrite your work.
 
-### 3. 🛡️ Plain-English Action Approvals
-* Before any non-trivial operation (Split, Rewind, Pull, Uncommit), GitWizard shows a calm preview card explaining what will happen in plain English and guarantees zero data loss.
-
-### 4. ✂️ Branch & Commit Splitter
-* Did your AI pair programmer just touch 10+ files across your backend and UI?
-* Select which files go to Branch A and Branch B with a visual selector.
-* Sequentially commits and creates clean, PR-ready branches.
+**GitWizard gives you an unbreakable safety net.**  
+It translates all Git complexity into intuitive visual controls and guarantees that **you can never lose your code**.
 
 ---
 
-## ⭐ GitWizard Pro ($49 One-Time Lifetime / $29 Early Bird)
+## 🆚 Git CLI vs. GitWizard
 
-GitWizard Pro is built on a **Zero-COGS, Bring-Your-Own-Key (BYOK)** architecture. Zero monthly subscriptions. Complete offline and local execution.
-
-### 1. ✨ AI Semantic Commit Messages & PR Drafter
-* Generates conventional commit messages directly from your working tree diffs and untracked files with 1-click.
-* Provider-agnostic: Works with **Google Gemini**, **OpenAI (`gpt-4o-mini`)**, or **100% local Ollama**.
-
-### 2. 🔒 Pre-Flight Secret Radar & 1-Click Remediation
-* Scans all diffs and untracked files in **< 25ms** before every commit.
-* Catches OpenAI, Stripe, AWS, Anthropic, Gemini, Slack tokens, and database URLs.
-* **1-Click Remediation**: Automatically extracts plain secrets into `.env`, adds `.env` to `.gitignore`, and substitutes with `process.env.VARIABLE_NAME`.
-
-### 3. 🛡️ Production Branch Guard
-* Intercepts accidental direct commits to `main`, `master`, `production`, or `release/*`.
-* Provides 1-click feature branch relocation (`[🛡️ Create Feature Branch Instead]`).
-
-### 4. 📄 Surgical Single-File Rewind
-* Restore individual files from any snapshot with 1-click (`[📄 1 File...]`).
-* Leaves all your other modified and untracked files 100% untouched.
-
-### 5. ✂️ AI Multi-Branch Auto-Splitter
-* Analyzes semantic dependencies and import structures across 20+ modified files.
-* Automatically partitions files into 2–3 logical PR branches with proposed commit messages.
-
-### 6. ⚔️ Smart 3-Way AI Conflict Resolver
-* Inspects Git conflict stages (`BASE :1`, `OURS :2`, `THEIRS :3`).
-* Synthesizes non-destructive resolutions without losing any logic, imports, or bug fixes.
-* Verifies zero remaining conflict markers with an automated rollback airbag.
-
-### 7. ☁️ Private GitHub Cloud Sync Bridge
-* Zero third-party cloud backends.
-* Creates client-side **AES-256-GCM encrypted** snapshot bundles and syncs them directly to `refs/gitwizard/cloud-sync` on your existing GitHub repository.
+| What Happens | Traditional Git CLI | GitWizard 🧙‍♂️ |
+| :--- | :--- | :--- |
+| **Opening a new project** | `fatal: not a git repository` error | 1-Click **✨ Turn On Safe Mode** |
+| **First save on a fresh computer** | `fatal: empty ident name (code 128)` crash | Gentle in-app prompt for your display name |
+| **AI generates broken code** | Scary `git reset --hard` (destroys work) | 1-Click **⏪ Rewind** with automatic pre-save backup |
+| **Private API key in code** | Key leaks publicly to GitHub | **🔒 Private Key Shield** moves it to `.env` |
+| **AI touched 15 files at once** | Manual terminal staging headache | **✂️ Smart Splitter** (`[🎨 All UI]` / `[⚙️ All Backend]`) |
+| **Remote updates collide** | Corrupted files with `<<<<<<< HEAD` | **Safe Pull** auto-aborts and restores your exact screen |
+| **Sending code to GitHub** | `fatal: 'origin' does not appear` crash | **☁️ Connect to GitHub** guided 1-click assistant |
 
 ---
 
-## ⚙️ AI Provider Setup (BYOK)
+## 🌟 Key Features
 
-Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run:
-`GitWizard Pro: Configure AI Provider & Key`
+### 🪄 Safe Mode (1-Click Project Protection)
+Open any folder on your computer. If it's not tracked yet, GitWizard shows a welcoming hero card. Click **Turn On Safe Mode** to initialize your project and capture an immediate safety baseline in 1 second.
 
-Select your preferred provider:
-1. **Google Gemini**: Free tier API keys available at [ai.google.dev](https://ai.google.dev).
-2. **OpenAI**: Use your OpenAI API key with `gpt-4o-mini`.
-3. **Local Ollama**: 100% offline, zero keys required (`http://localhost:11434`).
+### ⏪ Time Machine & Visual Rewind
+Take snapshots before prompting your AI. If an AI hallucination messes up your app:
+* Click **⏪ All** to rewind your entire workspace.
+* Before rewinding, GitWizard shows an **exact preview** of which files will change and captures a backup of your current screen first.
+* You can always jump forward or backward in time—**zero lost work**.
 
----
+### 🔒 Private API Key Shield (Secret Radar)
+Accidentally left an OpenAI, Stripe, Gemini, or database secret in your code? GitWizard's pre-flight shield detects sensitive tokens in milliseconds before saving:
+* Click **🔒 Move to .env (1-Click)** to extract the key to a private `.env` file and shield it with `.gitignore`.
 
-## 🚀 Installation & Usage
+### 🛡️ Live Website Protection (Branch Guard)
+Your `main` branch is what your users and visitors see. If you try to save experimental code directly to `main`, GitWizard gently suggests saving to a safe playground branch (`feature/updates`) so your live website never goes down.
 
-### Installing in VS Code / Cursor / Antigravity
-1. Open the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`).
-2. Click the `...` menu in the top-right of the Extensions panel.
-3. Select **Install from VSIX...** and choose `gitwizard-2.0.0.vsix`.
-4. Click the **GitWizard** wand icon (`$(wand)`) in the Activity Bar or check the Status Bar!
-5. Enjoy the 14-day free Pro trial or activate your lifetime key in the sidebar.
+### ✂️ Smart File Splitter
+AI modified 10 UI files and 5 backend routes in a single prompt?  
+* Click **🎨 All UI** to instantly group your frontend files into Branch A.
+* Click **⚙️ All Backend** to group your server and database files into Branch B.
+* Turn a messy AI code dump into 2 clean, organized feature branches in seconds.
 
----
+### ⚙️ In-Sidebar Settings (No Terminal Needed)
+Click the ⚙️ gear icon in the header to switch between **Google Gemini (Free Tier)**, **OpenAI**, or **Local Ollama (100% Offline)**. Test your connection live with 1 click. Zero Command Palette required.
 
-## 🛠️ Development & Testing
-
-```bash
-# Run entire 20-suite test battery (113 passing tests)
-npm test
-
-# Build extension and webview bundles
-npm run build
-
-# Strict TypeScript typechecking
-npm run compile
-
-# Package VSIX extension
-npx vsce package --no-dependencies
-```
+### ☁️ Private GitHub Cloud Sync
+Want offsite backups without third-party servers? GitWizard creates client-side AES-256 encrypted snapshot bundles stored directly in your own GitHub repository.
 
 ---
 
-## 📜 License
-MIT © Dr. OpenSource
+## 🚀 60-Second Quick Start
+
+1. **Install GitWizard** from the VS Code / Cursor Marketplace.
+2. Click the **🧙‍♂️ GitWizard** wand icon in your left sidebar.
+3. Click **✨ Enable Safe Mode** to turn on automatic time travel.
+4. Build freely with your favorite AI! If anything ever breaks, click **⏪ Rewind** to return to safety.
+
+---
+
+## 📜 Zero-Jargon Guarantee
+
+GitWizard follows a strict **Zero-Jargon Policy**:
+* No raw CLI error codes (`code 128`, `spawn ENOENT`).
+* No cryptic plumbing terms (`DAG`, `reflog`, `HEAD@{0}`, `index staging`).
+* Every action is explained in clear, plain English and comes with an automated rollback guarantee.
+
+---
+
+## 💎 Pricing: Generous Free Tier + Lifetime Pro
+
+* **Free Tier**: 100% free forever. Includes Safe Mode, Time Machine rewind, Daily Essentials (Save, Send, Update), and visual conflict protection.
+* **GitWizard Pro ($29 Early Bird Launch / $49 Lifetime)**: One-time payment. **Zero monthly subscriptions.** Bring your own AI key or run completely offline with Ollama. Includes AI commit message generator, AI multi-branch splitter, Private API Key shield, and AI merge conflict healing.
+
+---
+
+## 🛡️ License
+
+MIT © [Dr. OpenSource](https://github.com/DrOpenSource)

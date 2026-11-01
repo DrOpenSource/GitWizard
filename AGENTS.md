@@ -14,6 +14,9 @@ Welcome, Agent. You are developing **GitWizard**, an intent-based Git safety and
 3. **Strict Verification**:
    - Every sprint feature must have automated unit tests (e.g., using Vitest / Mocha) testing edge cases (e.g., uncommitted untracked files, merge conflicts, detached HEAD).
    - Always run lint and type checks before marking a task complete.
+4. **Vibe-First Ergonomics & Zero-Jargon Policy**:
+   - Never surface raw Git CLI errors (`empty ident name`, `code 128`, `spawn gh ENOENT`, `fatal: origin`) directly to users. Catch and translate them into calm, guided visual resolutions.
+   - Replace Git plumbing terms (`DAG`, `reflog`, `HEAD@{n}`, `index staging`, `origin`) with intuitive creator concepts (`Saved version`, `Undo`, `Live draft`, `Cloud backup`).
 
 ---
 
@@ -21,23 +24,26 @@ Welcome, Agent. You are developing **GitWizard**, an intent-based Git safety and
 
 ```
 GitWizard/
-├── .agents/                 # Antigravity/agent skills and workflows
+├── .agents/                      # Antigravity/agent skills and workflows
 │   └── skills/
-│       ├── sprint-manager/  # Skill for managing sprint states and progress
-│       └── git-safety/      # Skill for safe Git transaction patterns
-├── docs/                    # Living architectural documentation
-│   ├── PRD.md               # Product Requirements Document & MVP specs
-│   ├── ARCHITECTURE.md      # Extension architecture & Safety Engine design
-│   └── ROADMAP.md           # Sprint status, backlog, and acceptance criteria
+│       ├── sprint-manager/       # Skill for managing sprint states and progress
+│       └── git-safety/           # Skill for safe Git transaction patterns
+├── docs/                         # Living architectural documentation
+│   ├── PRD.md                    # Product Requirements Document & MVP specs
+│   ├── ARCHITECTURE.md           # Extension architecture & Safety Engine design
+│   ├── ROADMAP.md                # Sprint status, backlog, and acceptance criteria
+│   ├── CASE_STUDY_PRODUCT_DESIGN.md # Living Product Design Case Study & UX Transformation
+│   └── USER_TESTING_GUIDE.md     # Manual QA runbook and feature matrix
 ├── src/
-│   ├── engine/              # Core Git safety engine (pure Node/TS, testable independently)
-│   │   ├── snapshot.ts      # Shadow ref & working tree snapshot manager
-│   │   ├── transaction.ts   # Command sequencer with rollback
-│   │   └── git-client.ts    # Safe typed Git wrapper
-│   ├── wizards/             # High-level intent flows (Checkpoint, Split, Sync, Undo)
-│   ├── extension/           # VS Code extension entry point, commands, and providers
-│   └── webview/             # Webview sidebar UI (Vibe-coder friendly visual wizard)
-└── test/                    # Test suite with mock Git repositories
+│   ├── engine/                   # Core Git safety engine (pure Node/TS, testable independently)
+│   │   ├── snapshot.ts           # Shadow ref & working tree snapshot manager
+│   │   ├── transaction.ts        # Command sequencer with rollback
+│   │   └── git-client.ts         # Safe typed Git wrapper
+│   ├── pro/                      # Pro capability engines (Secret Radar, Conflict Resolver, Cloud Sync)
+│   ├── wizards/                  # High-level intent flows (Checkpoint, Split, Sync, Undo, Essentials)
+│   ├── extension/                # VS Code extension entry point, commands, and providers
+│   └── webview/                  # Webview sidebar UI (Vibe-coder friendly visual wizard)
+└── test/                         # Comprehensive unit & integration test suites
 ```
 
 ---
@@ -50,3 +56,14 @@ For every sprint task:
 3. Add corresponding unit/integration tests in `test/`.
 4. Run tests and typecheck (`npm test`, `npm run compile`).
 5. Update `docs/ROADMAP.md` with status and verified results.
+
+---
+
+## 4. Product Design Case Study Protocol (Living Document)
+
+As we execute the 5-phase UX transformation:
+- Maintain `docs/CASE_STUDY_PRODUCT_DESIGN.md` as our primary source of truth for UX evolution.
+- Whenever completing any of the 5 phases:
+  1. Update the phase status in `docs/CASE_STUDY_PRODUCT_DESIGN.md` (`🟡 Planned` → `🔵 In Progress` → `🟢 Completed & Verified`).
+  2. Record the verified metrics, design decisions, and before/after comparisons.
+  3. Ensure that `docs/ROADMAP.md` checkboxes match the case study status.

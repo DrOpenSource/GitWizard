@@ -13,6 +13,7 @@ export interface HumanGitAction {
   category: 'commit' | 'merge' | 'checkout' | 'rebase' | 'reset' | 'other';
   title: string;
   timestamp: string;
+  relativeTime?: string;
 }
 
 export interface UndoResult {
@@ -35,7 +36,7 @@ export class UndoWizard {
    * Parse git reflog entries into human-readable actions.
    */
   async getRecentActions(limit: number = 15): Promise<HumanGitAction[]> {
-    const res = await this.git.exec(['reflog', `-n`, String(limit), '--format=%h\t%gd\t%gs\t%ci'], { allowFailure: true });
+    const res = await this.git.exec(['reflog', `-n`, String(limit), '--format=%h\t%gd\t%gs\t%ci\t%cr'], { allowFailure: true });
     if (res.exitCode !== 0 || !res.stdout) {
       return [];
     }
@@ -44,7 +45,12 @@ export class UndoWizard {
     const actions: HumanGitAction[] = [];
 
     for (const line of lines) {
-      const [hash, selector, rawMessage, timestamp] = line.split('\t');
+      const parts = line.split('\t');
+      const hash = parts[0];
+      const selector = parts[1];
+      const rawMessage = parts[2];
+      const timestamp = parts[3];
+      const relativeTime = parts[4];
       if (!hash || !selector) continue;
 
       const { category, title } = this.categorizeAction(rawMessage || '');
@@ -54,7 +60,8 @@ export class UndoWizard {
         rawMessage: rawMessage ? rawMessage.trim() : '',
         category,
         title,
-        timestamp: timestamp ? timestamp.trim() : ''
+        timestamp: timestamp ? timestamp.trim() : '',
+        relativeTime: relativeTime ? relativeTime.trim() : undefined
       });
     }
 
@@ -65,22 +72,23 @@ export class UndoWizard {
    * Convert cryptic Git reflog message into clear English for vibe coders.
    */
   private categorizeAction(msg: string): { category: HumanGitAction['category']; title: string } {
-    if (msg.startsWith('commit:')) {
+    if (msg.startsWith('commit:') || msg.startsWith('commit (initial):')) {
+      const cleanMsg = msg.replace(/^commit(\s*\(initial\))?:\s*/, '').trim();
       return {
         category: 'commit',
-        title: `Committed: "${msg.replace('commit:', '').trim()}"`
+        title: `Saved: "${cleanMsg}"`
       };
     }
     if (msg.startsWith('commit (amend):')) {
       return {
         category: 'commit',
-        title: `Amended Commit: "${msg.replace('commit (amend):', '').trim()}"`
+        title: `Amended save: "${msg.replace('commit (amend):', '').trim()}"`
       };
     }
     if (msg.startsWith('merge')) {
       return {
         category: 'merge',
-        title: `Merged: "${msg.trim()}"`
+        title: `Merged updates: "${msg.trim()}"`
       };
     }
     if (msg.startsWith('checkout: moving from')) {
@@ -88,30 +96,30 @@ export class UndoWizard {
       if (match) {
         return {
           category: 'checkout',
-          title: `Switched branch from ${match[1]} to ${match[2]}`
+          title: `Switched branch: ${match[1]} → ${match[2]}`
         };
       }
       return {
         category: 'checkout',
-        title: 'Switched branch / checkout'
+        title: 'Switched branch'
       };
     }
     if (msg.startsWith('rebase')) {
       return {
         category: 'rebase',
-        title: `Rebase: "${msg.trim()}"`
+        title: `Realigned history: "${msg.trim()}"`
       };
     }
     if (msg.startsWith('reset: moving to')) {
       return {
         category: 'reset',
-        title: `Reset: "${msg.trim()}"`
+        title: `Rewound to: "${msg.replace('reset: moving to', '').trim()}"`
       };
     }
 
     return {
       category: 'other',
-      title: msg || 'Unknown Git event'
+      title: msg || 'Project history event'
     };
   }
 

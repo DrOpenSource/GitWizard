@@ -94,6 +94,26 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           break;
         }
 
+        case 'INIT_REPO': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Enabling Safe Mode...');
+            const initRes = await this._git.initRepo();
+            if (initRes.exitCode === 0) {
+              try {
+                await this._checkpointWizard.saveCheckpoint('Initial Safe Mode Baseline');
+              } catch {}
+              vscode.window.showInformationMessage('GitWizard: Safe Mode Enabled! 🧙‍♂️');
+              this._view?.webview.postMessage({ type: 'REPO_INITIALIZED', success: true });
+            } else {
+              vscode.window.showErrorMessage('GitWizard Init Failed: ' + initRes.stderr);
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage('GitWizard Init Error: ' + err.message);
+          }
+          break;
+        }
+
         case 'GET_PRO_STATUS': {
           const proStatus = this._licenseManager.getStatus();
           this._view?.webview.postMessage({
@@ -125,22 +145,16 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
             const configSummary = this._aiService.getConfigSummary();
 
             if (configSummary.provider !== 'ollama' && !configSummary.hasKey) {
-              const enteredKey = await vscode.window.showInputBox({
-                prompt: `Enter your ${configSummary.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API Key:`,
-                password: true,
-                placeHolder: configSummary.provider === 'gemini' ? 'AIzaSy...' : 'sk-...'
+              this._view?.webview.postMessage({
+                type: 'OPEN_SETTINGS',
+                reason: `Please enter your ${configSummary.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API key to enable AI-powered features.`
               });
-              if (!enteredKey) {
-                this._view?.webview.postMessage({
-                  type: 'AI_COMMIT_RESPONSE',
-                  success: false,
-                  error: 'API key is required to generate commit messages with AI.'
-                });
-                break;
-              }
-              const settingKey = configSummary.provider === 'gemini' ? 'geminiApiKey' : 'openaiApiKey';
-              await vscode.workspace.getConfiguration('gitwizard').update(settingKey, enteredKey, vscode.ConfigurationTarget.Global);
-              this._aiService.updateConfig({ apiKey: enteredKey });
+              this._view?.webview.postMessage({
+                type: 'AI_COMMIT_RESPONSE',
+                success: false,
+                error: `Please enter your ${configSummary.provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API key in Settings.`
+              });
+              break;
             }
 
             const result = await this._aiCommitWizard.generateCommitMessage();
@@ -384,6 +398,20 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
             const res = await this._repoSplitterWizard.splitToNewRepo(data.options);
             if (res.success) {
               vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+            } else if (res.missingGhCli) {
+              const action = await vscode.window.showWarningMessage(
+                `GitWizard: GitHub CLI not detected. Would you like to create "${data.options.newRepoName}" on GitHub in your browser?`,
+                'Open GitHub in Browser',
+                'Cancel'
+              );
+              if (action === 'Open GitHub in Browser' && res.webFallbackUrl) {
+                vscode.env.openExternal(vscode.Uri.parse(res.webFallbackUrl));
+              }
+              this._view?.webview.postMessage({
+                type: 'SPLIT_REPO_FALLBACK',
+                webFallbackUrl: res.webFallbackUrl,
+                message: res.message
+              });
             } else {
               vscode.window.showErrorMessage(`GitWizard Error: ${res.message}`);
             }
@@ -412,10 +440,29 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
 
         case 'SAFE_COMMIT': {
           try {
+            if (data.authorName && data.authorEmail) {
+              await this._git.setLocalAuthorIdentity(data.authorName, data.authorEmail);
+            }
+
             const res = await this._essentialsWizard.safeCommit(data.message, {
               allowProtected: data.allowProtected,
-              ignoreSecrets: data.ignoreSecrets
+              ignoreSecrets: data.ignoreSecrets,
+              authorName: data.authorName,
+              authorEmail: data.authorEmail
             });
+
+            if (res.needsInit) {
+              vscode.window.showInformationMessage('GitWizard: Please enable Safe Mode before saving changes.');
+              await this.broadcastStatus();
+              break;
+            } else if (res.requiresIdentity) {
+              this._view?.webview.postMessage({
+                type: 'REQUIRE_GIT_IDENTITY',
+                message: res.message,
+                pendingCommitMessage: data.message
+              });
+              break;
+            }
 
             if (res.isProtectedBranch) {
               this._view?.webview.postMessage({
@@ -478,6 +525,13 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           try {
             vscode.window.showInformationMessage('GitWizard: Pushing to remote...');
             const res = await this._essentialsWizard.safePush(data.remote || 'origin');
+            if (res.requiresRemote) {
+              this._view?.webview.postMessage({
+                type: 'REQUIRE_REMOTE_URL',
+                message: res.message
+              });
+              break;
+            }
             if (res.success) {
               vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
             } else {
@@ -494,6 +548,13 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           try {
             vscode.window.showInformationMessage('GitWizard: Fetching latest updates...');
             const res = await this._essentialsWizard.safePull(data.remote || 'origin');
+            if (res.requiresRemote) {
+              this._view?.webview.postMessage({
+                type: 'REQUIRE_REMOTE_URL',
+                message: res.message
+              });
+              break;
+            }
             if (res.success) {
               vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
             } else {
@@ -502,6 +563,39 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
             await this.broadcastStatus();
           } catch (err: any) {
             vscode.window.showErrorMessage(`GitWizard Pull Error: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'SET_REMOTE_URL': {
+          try {
+            const res = await this._essentialsWizard.setRemoteUrl(data.url, data.remote || 'origin');
+            if (res.success) {
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+              this._view?.webview.postMessage({
+                type: 'REMOTE_URL_CONFIGURED',
+                success: true
+              });
+              if (data.autoPush) {
+                vscode.window.showInformationMessage('GitWizard: Connecting & backing up to GitHub...');
+                const pushRes = await this._essentialsWizard.safePush(data.remote || 'origin');
+                if (pushRes.success) {
+                  vscode.window.showInformationMessage(`GitWizard: Cloud backup complete! ☁️`);
+                } else {
+                  vscode.window.showErrorMessage(`GitWizard Push Error: ${pushRes.message}`);
+                }
+              }
+            } else {
+              vscode.window.showErrorMessage(`GitWizard Remote Error: ${res.message}`);
+              this._view?.webview.postMessage({
+                type: 'REMOTE_URL_CONFIGURED',
+                success: false,
+                error: res.message
+              });
+            }
+            await this.broadcastStatus();
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Remote Error: ${err.message}`);
           }
           break;
         }
@@ -556,18 +650,153 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           }
           break;
         }
+
+        case 'GET_AI_CONFIG': {
+          try {
+            const config = vscode.workspace.getConfiguration('gitwizard');
+            const provider = config.get<string>('aiProvider') || 'gemini';
+            const geminiApiKey = config.get<string>('geminiApiKey') || process.env.GEMINI_API_KEY || '';
+            const openaiApiKey = config.get<string>('openaiApiKey') || process.env.OPENAI_API_KEY || '';
+            const ollamaBaseUrl = config.get<string>('ollamaBaseUrl') || 'http://localhost:11434';
+            const ollamaModel = config.get<string>('ollamaModel') || 'llama3.2';
+
+            this._view?.webview.postMessage({
+              type: 'AI_CONFIG_UPDATE',
+              config: {
+                provider,
+                hasGeminiKey: Boolean(geminiApiKey),
+                maskedGeminiKey: geminiApiKey ? '••••••••' + geminiApiKey.slice(-4) : '',
+                hasOpenAiKey: Boolean(openaiApiKey),
+                maskedOpenAiKey: openaiApiKey ? '••••••••' + openaiApiKey.slice(-4) : '',
+                ollamaBaseUrl,
+                ollamaModel
+              }
+            });
+          } catch (err: any) {
+            console.error('Failed to get AI config:', err);
+          }
+          break;
+        }
+
+        case 'SAVE_AI_CONFIG': {
+          try {
+            const config = vscode.workspace.getConfiguration('gitwizard');
+            if (data.provider !== undefined) {
+              await config.update('aiProvider', data.provider, vscode.ConfigurationTarget.Global);
+            }
+            if (data.geminiApiKey !== undefined && !data.geminiApiKey.startsWith('••••••••')) {
+              await config.update('geminiApiKey', data.geminiApiKey.trim(), vscode.ConfigurationTarget.Global);
+            }
+            if (data.openaiApiKey !== undefined && !data.openaiApiKey.startsWith('••••••••')) {
+              await config.update('openaiApiKey', data.openaiApiKey.trim(), vscode.ConfigurationTarget.Global);
+            }
+            if (data.ollamaBaseUrl !== undefined) {
+              await config.update('ollamaBaseUrl', data.ollamaBaseUrl.trim(), vscode.ConfigurationTarget.Global);
+            }
+            if (data.ollamaModel !== undefined) {
+              await config.update('ollamaModel', data.ollamaModel.trim(), vscode.ConfigurationTarget.Global);
+            }
+
+            this._aiService.updateConfig(getActiveAIConfig());
+            vscode.window.showInformationMessage('GitWizard: AI settings saved!');
+
+            this._view?.webview.postMessage({
+              type: 'AI_CONFIG_SAVED',
+              success: true
+            });
+
+            const updatedConfig = vscode.workspace.getConfiguration('gitwizard');
+            const p = updatedConfig.get<string>('aiProvider') || 'gemini';
+            const gKey = updatedConfig.get<string>('geminiApiKey') || process.env.GEMINI_API_KEY || '';
+            const oKey = updatedConfig.get<string>('openaiApiKey') || process.env.OPENAI_API_KEY || '';
+            this._view?.webview.postMessage({
+              type: 'AI_CONFIG_UPDATE',
+              config: {
+                provider: p,
+                hasGeminiKey: Boolean(gKey),
+                maskedGeminiKey: gKey ? '••••••••' + gKey.slice(-4) : '',
+                hasOpenAiKey: Boolean(oKey),
+                maskedOpenAiKey: oKey ? '••••••••' + oKey.slice(-4) : '',
+                ollamaBaseUrl: updatedConfig.get<string>('ollamaBaseUrl') || 'http://localhost:11434',
+                ollamaModel: updatedConfig.get<string>('ollamaModel') || 'llama3.2'
+              }
+            });
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Settings Error: ${err.message}`);
+            this._view?.webview.postMessage({
+              type: 'AI_CONFIG_SAVED',
+              success: false,
+              error: err.message
+            });
+          }
+          break;
+        }
+
+        case 'TEST_AI_CONNECTION': {
+          try {
+            const testResult = await this._aiService.testConnection(data.options);
+            this._view?.webview.postMessage({
+              type: 'AI_CONNECTION_TEST_RESULT',
+              ...testResult
+            });
+          } catch (err: any) {
+            this._view?.webview.postMessage({
+              type: 'AI_CONNECTION_TEST_RESULT',
+              success: false,
+              message: `Connection test error: ${err.message}`
+            });
+          }
+          break;
+        }
+
+        case 'PREVIEW_SNAPSHOT_DIFF': {
+          try {
+            const diffFiles = await this._checkpointWizard.getDiffWithCurrent(data.snapshotId);
+            this._view?.webview.postMessage({
+              type: 'SNAPSHOT_DIFF_PREVIEW',
+              snapshotId: data.snapshotId,
+              files: diffFiles
+            });
+          } catch (err: any) {
+            console.error('Failed to get checkpoint diff:', err);
+            this._view?.webview.postMessage({
+              type: 'SNAPSHOT_DIFF_PREVIEW',
+              snapshotId: data.snapshotId,
+              files: []
+            });
+          }
+          break;
+        }
       }
     });
+  }
+
+  public openSettings(reason?: string) {
+    this._view?.webview.postMessage({ type: 'OPEN_SETTINGS', reason });
   }
 
   public async broadcastStatus() {
     try {
       const status = await this._git.getStatus();
+      const proStatus = this._licenseManager.getStatus();
+
+      if (!status.isRepo) {
+        this._view?.webview.postMessage({
+          type: 'STATUS_UPDATE',
+          status,
+          snapshots: [],
+          actions: [],
+          localBranches: [],
+          proStatus
+        });
+        await this._updateStatusBar();
+        return;
+      }
+
       const snapshots = await this._checkpointWizard.listCheckpoints();
       const actions = await this._undoWizard.getRecentActions(10);
       const branchesRes = await this._git.exec(['branch', '--format=%(refname:short)'], { allowFailure: true });
       const localBranches = branchesRes.exitCode === 0 && branchesRes.stdout ? branchesRes.stdout.split('\n').filter(Boolean) : [];
-      const proStatus = this._licenseManager.getStatus();
 
       this._view?.webview.postMessage({
         type: 'STATUS_UPDATE',
@@ -664,6 +893,12 @@ export function activate(context: vscode.ExtensionContext) {
   const updateStatusBar = async () => {
     try {
       const status = await git.getStatus();
+      if (!status.isRepo) {
+        statusBarItem.text = '$(wand) Safe Mode (Off)';
+        statusBarItem.tooltip = 'GitWizard: Safe Mode is not active. Click to initialize.';
+        statusBarItem.backgroundColor = undefined;
+        return;
+      }
       const dirtyCount = status.modified.length + status.staged.length + status.untracked.length;
       const pro = licenseManager.getStatus();
       const proTag = pro.isPro ? ' ⭐' : '';
@@ -722,6 +957,23 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Enable Safe Mode (git init) Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.initRepo', async () => {
+      vscode.window.showInformationMessage('GitWizard: Enabling Safe Mode...');
+      const initRes = await git.initRepo();
+      if (initRes.exitCode === 0) {
+        try {
+          await checkpointWizard.saveCheckpoint('Initial Safe Mode Baseline');
+        } catch {}
+        vscode.window.showInformationMessage('GitWizard: Safe Mode Enabled! 🧙‍♂️');
+      } else {
+        vscode.window.showErrorMessage('GitWizard Init Failed: ' + initRes.stderr);
+      }
+      await provider.broadcastStatus();
+    })
+  );
+
   // Pro: Generate AI Commit Message Command
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.generateAICommit', async () => {
@@ -776,31 +1028,36 @@ export function activate(context: vscode.ExtensionContext) {
   // Pro: Configure AI Provider & API Key Command
   context.subscriptions.push(
     vscode.commands.registerCommand('gitwizard.configureAI', async () => {
-      const providerPick = await vscode.window.showQuickPick(
-        [
-          { label: 'Google Gemini', description: 'Fast, high-quality, free-tier available', value: 'gemini' },
-          { label: 'OpenAI (gpt-4o-mini)', description: 'Industry standard reasoning', value: 'openai' },
-          { label: 'Local Ollama', description: '100% offline, zero API keys required', value: 'ollama' }
-        ],
-        { placeHolder: 'Select your preferred AI provider for GitWizard Pro:' }
-      );
-      if (!providerPick) return;
+      try {
+        await vscode.commands.executeCommand('gitwizard.sidebarView.focus');
+        provider.openSettings();
+      } catch {
+        const providerPick = await vscode.window.showQuickPick(
+          [
+            { label: 'Google Gemini', description: 'Fast, high-quality, free-tier available', value: 'gemini' },
+            { label: 'OpenAI (gpt-4o-mini)', description: 'Industry standard reasoning', value: 'openai' },
+            { label: 'Local Ollama', description: '100% offline, zero API keys required', value: 'ollama' }
+          ],
+          { placeHolder: 'Select your preferred AI provider for GitWizard Pro:' }
+        );
+        if (!providerPick) return;
 
-      const config = vscode.workspace.getConfiguration('gitwizard');
-      await config.update('aiProvider', providerPick.value, vscode.ConfigurationTarget.Global);
+        const config = vscode.workspace.getConfiguration('gitwizard');
+        await config.update('aiProvider', providerPick.value, vscode.ConfigurationTarget.Global);
 
-      if (providerPick.value !== 'ollama') {
-        const key = await vscode.window.showInputBox({
-          prompt: `Enter API key for ${providerPick.label}:`,
-          password: true
-        });
-        if (key) {
-          const setting = providerPick.value === 'gemini' ? 'geminiApiKey' : 'openaiApiKey';
-          await config.update(setting, key, vscode.ConfigurationTarget.Global);
-          vscode.window.showInformationMessage(`GitWizard: Configured ${providerPick.label} successfully!`);
+        if (providerPick.value !== 'ollama') {
+          const key = await vscode.window.showInputBox({
+            prompt: `Enter API key for ${providerPick.label}:`,
+            password: true
+          });
+          if (key) {
+            const setting = providerPick.value === 'gemini' ? 'geminiApiKey' : 'openaiApiKey';
+            await config.update(setting, key, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage(`GitWizard: Configured ${providerPick.label} successfully!`);
+          }
+        } else {
+          vscode.window.showInformationMessage(`GitWizard: Local Ollama configured at http://localhost:11434.`);
         }
-      } else {
-        vscode.window.showInformationMessage(`GitWizard: Local Ollama configured at http://localhost:11434.`);
       }
     })
   );

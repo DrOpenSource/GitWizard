@@ -13,6 +13,12 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 | **Sprint 3: Extension Host & Webview UI** | Sidebar Webview Provider, message passing, responsive dark-mode UI, status bar indicator | Completed (Verified) |
 | **Sprint 4: Integration & Packaging** | Packaging `.vsix` for VS Code / Antigravity / Cursor, verification, and documentation | Completed (Verified) |
 | **Sprint 5: Vibe-First Ergonomics & Auto-Flight Recorder** | Daily essentials, background auto-checkpoints, virtual timeline rewind tree, plain-English action approvals | Completed (Verified) |
+| **Sprint 6: Hardening & v1.0.0 Stable Release** | Full test coverage audit, shadow index isolation bugfix, reflog edge cases, 55 unit tests | Completed (Verified) |
+| **Sprint 7: Pro Licensing & AI Commit Drafter** | Offline HMAC licensing, 14-day zero-card trial, multi-provider AI service (Gemini/OpenAI/Ollama) | Completed (Verified) |
+| **Sprint 8: Pre-Flight Secret Radar & Branch Guard** | Sub-25ms secret scanning, 1-click .env remediation, protected branch intercept on `main` | Completed (Verified) |
+| **Sprint 9: Surgical File Rewind & AI Auto-Splitter** | Per-file rollback, multi-branch AST semantic clustering, 101 unit tests | Completed (Verified) |
+| **Sprint 10: Smart AI Conflict Resolver & Cloud Sync** | 3-way conflict resolver, AES-256 encrypted private cloud sync, v2.0.0 release | Completed (Verified) |
+| **Sprint 11: The Vibe-First UX Transformation** | 5-phase onboarding, empty state airbag, de-jargonization, guided GitHub sync, case study | In Progress |
 
 ---
 
@@ -96,8 +102,6 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] **6.10 Command Palette Manifest Complete (`package.json` & `src/extension/index.ts`)**: Registered `gitwizard.undoLast`, `gitwizard.splitToNewRepo`, `gitwizard.pushMain`, and `gitwizard.splitChanges`.
   - [x] **6.11 Open Source Documentation**: Authored `CHANGELOG.md` and `CONTRIBUTING.md`.
   - [x] **6.12 Packaging & Release**: Version bumped to `1.0.0`, verified with zero TypeScript errors and packaged `gitwizard-1.0.0.vsix`.
-
----
 
 ---
 
@@ -278,5 +282,68 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] Version bumped to `2.0.0` in `package.json`.
   - [x] Packaged `gitwizard-2.0.0.vsix` with zero warnings (1.24 MB).
 
+---
 
+## 🎨 Sprint 11: The Vibe-First UX Transformation (Humanizing Git for Noobs)
 
+> **Objective**: Eliminate every barrier in info, knowledge, and experience preventing non-technical vibe coders from safely using Git.  
+> **Reference Specs**: Living Product Designer Case Study in [docs/CASE_STUDY_PRODUCT_DESIGN.md](file:///c:/Users/user/Desktop/Dr_OpenSource/Projects/GitWizard/docs/CASE_STUDY_PRODUCT_DESIGN.md).
+
+---
+
+### Detailed Sprint 11 Phased Backlog:
+
+#### Phase 1: Zero-Friction Onboarding & Untracked State Airbag
+- [x] **Chunk 11.1: Uninitialized Repository Detector (`src/engine/git-client.ts` & `src/extension/index.ts`)**
+  - [x] Implement `isRepo()` check in `GitClient` without throwing unhandled exceptions.
+  - [x] Update `broadcastStatus()` to safely return `isRepo: false` when folder lacks `.git`.
+  - [x] Add welcoming Webview Onboarding Card: "🪄 GitWizard Safe Mode is Ready: Turn on Safe Mode to get automatic time travel and safety backups" with `[✨ Enable Safe Mode (1-Click Init)]`.
+  - [x] Wire 1-click `INIT_REPO` message handler to execute `git init` and create initial baseline snapshot.
+- [x] **Chunk 11.2: Git Identity Self-Healing Modal (`src/wizards/essentials.ts` & `src/extension/index.ts`)**
+  - [x] Detect missing `user.name` / `user.email` before or during `safeCommit()`.
+  - [x] Surface gentle in-app modal in Webview asking for Display Name and Email instead of throwing `fatal: empty ident name (code 128)`.
+  - [x] Save identity locally (`git config user.name "..."`, `git config user.email "..."`) and complete commit seamlessly.
+- [x] **Chunk 11.3: Phase 1 Unit Test Coverage (`test/wizards/onboarding.test.ts`)**
+  - [x] Test uninitialized directory status reporting.
+  - [x] Test 1-click `git init` initialization transaction with initial snapshot capture.
+  - [x] Test identity interception and auto-configuration on fresh Git environments (5 passing tests).
+
+#### Phase 2: In-App Ergonomics & Settings De-Jargonization
+- [x] **Chunk 11.4: In-Sidebar ⚙️ Settings Modal (`src/webview/App.tsx` & `src/extension/index.ts`)**
+  - [x] Add ⚙️ settings icon button to the sidebar header next to `🧙 GITWIZARD`.
+  - [x] Build in-sidebar modal for AI Provider selection (Gemini, OpenAI, Ollama), API key input, and Ollama URL configuration.
+  - [x] Add live API key connection test button (`[🔌 Test Connection]`).
+  - [x] Eliminate all prompts telling users to run "Command Palette (`Ctrl+Shift+P`)" commands.
+- [x] **Chunk 11.5: Humanized Timeline & Reflog De-Jargonization (`src/wizards/undo.ts` & `src/webview/App.tsx`)**
+  - [x] Replace cryptic `HEAD@{0}`, `HEAD@{1}` with relative human timestamps (`Just now`, `5 mins ago`, `Yesterday`).
+  - [x] Translate Git action codes into human creator phrases (`Saved 3 files`, `Created new draft branch`, `Switched to feature/auth`).
+- [x] **Chunk 11.6: Reassuring Co-Pilot Messaging for Secret Radar & Branch Guard**
+  - [x] Rewrite Secret Radar alert from "Security Breach/Blocked" into reassuring co-pilot guidance (`🔒 Private API Key Protected`).
+  - [x] Clarify Branch Guard to explain why protecting Live/Production (`main`) keeps the website from breaking (`🛡️ Live Website Protection`).
+
+#### Phase 3: Visual Safety, Smart Splitter & Diff Previews
+- [x] **Chunk 11.7: Semantic Categorizer Badges for File Splitter (`src/webview/App.tsx`)**
+  - [x] Group dirty files into intuitive visual buckets: 🎨 `UI / Components`, ⚙️ `Backend / API`, 📄 `Config / Assets`.
+  - [x] Add "Select All UI" and "Select All Backend" 1-click filters in Tab 3 (`✂️ Split`).
+- [x] **Chunk 11.8: Visual Consequence Preview on Rewind (`src/webview/App.tsx`)**
+  - [x] Show file count and list of affected files before snapshot restoration.
+  - [x] Reassure user with visible guarantee: "🛡️ A safety backup of your current screen is automatically captured before rewinding."
+
+#### Phase 4: Remote Sync & GitHub Onboarding Guard
+- [x] **Chunk 11.9: Guided GitHub Connect Assistant for Safe Push (`src/wizards/essentials.ts` & `src/webview/App.tsx`)**
+  - [x] Check if remote `origin` exists before attempting `safePush()`.
+  - [x] If unlinked, suppress raw error toast and show guided modal: "☁️ Connect to GitHub (Link your repository URL to sync)".
+- [x] **Chunk 11.10: Standalone Repo Split Graceful Fallback (`src/wizards/publish.ts`)**
+  - [x] Check for `gh` CLI presence before invoking child process.
+  - [x] If missing, provide instant browser link fallback to GitHub "New Repository" page with pre-filled repo name instead of throwing `spawn gh ENOENT`.
+
+#### Phase 5: Marketplace Copy, Jargon-Free README & Visuals
+- [x] **Chunk 11.11: Marketplace Discovery & Categorization (`package.json`)**
+  - [x] Update categories to `["AI", "SCM Providers", "Education"]`.
+  - [x] Add keywords: `cursor`, `vibe-coding`, `copilot`, `antigravity`, `time-machine`, `undo`, `git-safety`, `backup`, `noob`.
+- [x] **Chunk 11.12: Jargon-Free README Overhaul (`README.md`)**
+  - [x] Strip out references to DAG topologies, Zero-COGS, stage :1/:2/:3, and VSIX installation.
+  - [x] Insert Value Comparison Table (Traditional Git vs GitWizard).
+  - [x] Include animated walkthrough GIF placeholders and clear benefit-first copy.
+- [x] **Chunk 11.13: Case Study Milestone Verification (`docs/CASE_STUDY_PRODUCT_DESIGN.md`)**
+  - [x] Update all 5 phase status badges and live metrics upon completion.

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getFileCategory, getCategoryBadge, FileCategory } from '../engine/file-category';
 
 declare function acquireVsCodeApi(): {
   postMessage(msg: any): void;
@@ -16,6 +17,7 @@ try {
 }
 
 export interface GitRepoStatus {
+  isRepo?: boolean;
   branch: string;
   isClean: boolean;
   staged: string[];
@@ -39,6 +41,7 @@ export interface HumanGitAction {
   category: 'commit' | 'merge' | 'checkout' | 'rebase' | 'reset' | 'other';
   title: string;
   timestamp: string;
+  relativeTime?: string;
 }
 
 export interface LicenseStatus {
@@ -66,6 +69,9 @@ interface ConfirmModalData {
   consequences: string[];
   confirmButtonText: string;
   onConfirm: () => void;
+  affectedFiles?: Array<{ path: string; status?: 'modified' | 'added' | 'deleted' }>;
+  safetyGuarantee?: string;
+  isLoadingDiff?: boolean;
 }
 
 export const App: React.FC = () => {
@@ -138,8 +144,37 @@ export const App: React.FC = () => {
   // Confirmation Modal state
   const [confirmModal, setConfirmModal] = useState<ConfirmModalData | null>(null);
 
+  // Phase 1 Onboarding & Identity Airbag State
+  const [isInitializingRepo, setIsInitializingRepo] = useState(false);
+  const [showIdentityModal, setShowIdentityModal] = useState(false);
+  const [authorNameInput, setAuthorNameInput] = useState('');
+  const [authorEmailInput, setAuthorEmailInput] = useState('');
+  const [pendingCommitMessage, setPendingCommitMessage] = useState('');
+  const [identityError, setIdentityError] = useState<string | null>(null);
+
+  // Sprint 11 Phase 2 Settings & Ergonomics State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsProvider, setSettingsProvider] = useState<'gemini' | 'openai' | 'ollama'>('gemini');
+  const [settingsApiKey, setSettingsApiKey] = useState('');
+  const [hasConfiguredKey, setHasConfiguredKey] = useState(false);
+  const [maskedKey, setMaskedKey] = useState('');
+  const [settingsBaseUrl, setSettingsBaseUrl] = useState('http://localhost:11434');
+  const [settingsModel, setSettingsModel] = useState('llama3.2');
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionFeedback, setConnectionFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [settingsToast, setSettingsToast] = useState<string | null>(null);
+  const [settingsReason, setSettingsReason] = useState<string | null>(null);
+
+  // Sprint 11 Phase 4 Remote Sync & GitHub Onboarding Guard
+  const [showConnectRemoteModal, setShowConnectRemoteModal] = useState(false);
+  const [remoteUrlInput, setRemoteUrlInput] = useState('');
+  const [remoteUrlError, setRemoteUrlError] = useState<string | null>(null);
+  const [isConfiguringRemote, setIsConfiguringRemote] = useState(false);
+  const [splitRepoFallbackUrl, setSplitRepoFallbackUrl] = useState<string | null>(null);
+
   useEffect(() => {
     vscode.postMessage({ type: 'GET_STATUS' });
+    vscode.postMessage({ type: 'GET_AI_CONFIG' });
 
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
@@ -156,6 +191,37 @@ export const App: React.FC = () => {
         if (data.proStatus) setProStatus(data.proStatus);
       } else if (data.type === 'PRO_STATUS_UPDATE') {
         setProStatus(data.proStatus);
+      } else if (data.type === 'OPEN_SETTINGS') {
+        setShowSettingsModal(true);
+        if (data.reason) setSettingsReason(data.reason);
+        vscode.postMessage({ type: 'GET_AI_CONFIG' });
+      } else if (data.type === 'AI_CONFIG_UPDATE') {
+        if (data.config) {
+          setSettingsProvider(data.config.provider || 'gemini');
+          if (data.config.provider === 'gemini') {
+            setHasConfiguredKey(Boolean(data.config.hasGeminiKey));
+            setMaskedKey(data.config.maskedGeminiKey || '');
+          } else if (data.config.provider === 'openai') {
+            setHasConfiguredKey(Boolean(data.config.hasOpenAiKey));
+            setMaskedKey(data.config.maskedOpenAiKey || '');
+          } else {
+            setHasConfiguredKey(false);
+            setMaskedKey('');
+          }
+          if (data.config.ollamaBaseUrl) setSettingsBaseUrl(data.config.ollamaBaseUrl);
+          if (data.config.ollamaModel) setSettingsModel(data.config.ollamaModel);
+        }
+      } else if (data.type === 'AI_CONFIG_SAVED') {
+        if (data.success) {
+          setSettingsToast('Settings saved successfully! ✨');
+          setTimeout(() => setSettingsToast(null), 3000);
+        } else {
+          setSettingsToast(data.error || 'Failed to save settings');
+          setTimeout(() => setSettingsToast(null), 3000);
+        }
+      } else if (data.type === 'AI_CONNECTION_TEST_RESULT') {
+        setIsTestingConnection(false);
+        setConnectionFeedback({ success: data.success, message: data.message });
       } else if (data.type === 'AI_COMMIT_RESPONSE') {
         setIsGeneratingAI(false);
         if (data.success && data.commitMessage) {
@@ -208,12 +274,83 @@ export const App: React.FC = () => {
         setSecretRadarAlert(null);
       } else if (data.type === 'BRANCH_RELOCATED') {
         setBranchGuardAlert(null);
+      } else if (data.type === 'REQUIRE_GIT_IDENTITY') {
+        setPendingCommitMessage(data.pendingCommitMessage || commitMessage);
+        setShowIdentityModal(true);
+      } else if (data.type === 'REPO_INITIALIZED') {
+        setIsInitializingRepo(false);
+      } else if (data.type === 'SNAPSHOT_DIFF_PREVIEW') {
+        setConfirmModal((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            isLoadingDiff: false,
+            affectedFiles: data.files || []
+          };
+        });
+      } else if (data.type === 'REQUIRE_REMOTE_URL') {
+        setShowConnectRemoteModal(true);
+        setRemoteUrlError(null);
+      } else if (data.type === 'REMOTE_URL_CONFIGURED') {
+        setIsConfiguringRemote(false);
+        if (data.success) {
+          setShowConnectRemoteModal(false);
+          setRemoteUrlInput('');
+          setRemoteUrlError(null);
+        } else {
+          setRemoteUrlError(data.error || 'Failed to connect repository URL.');
+        }
+      } else if (data.type === 'SPLIT_REPO_FALLBACK') {
+        if (data.webFallbackUrl) {
+          setSplitRepoFallbackUrl(data.webFallbackUrl);
+        }
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  const handleSaveSettings = () => {
+    vscode.postMessage({
+      type: 'SAVE_AI_CONFIG',
+      provider: settingsProvider,
+      geminiApiKey: settingsProvider === 'gemini' ? (settingsApiKey.trim() || undefined) : undefined,
+      openaiApiKey: settingsProvider === 'openai' ? (settingsApiKey.trim() || undefined) : undefined,
+      ollamaBaseUrl: settingsBaseUrl.trim(),
+      ollamaModel: settingsModel.trim()
+    });
+    setSettingsApiKey('');
+  };
+
+  const handleTestConnection = () => {
+    setIsTestingConnection(true);
+    setConnectionFeedback(null);
+    vscode.postMessage({
+      type: 'TEST_AI_CONNECTION',
+      options: {
+        provider: settingsProvider,
+        apiKey: settingsApiKey.trim() || undefined,
+        baseUrl: settingsBaseUrl.trim(),
+        model: settingsModel.trim()
+      }
+    });
+  };
+
+  const handleConnectRemote = () => {
+    if (!remoteUrlInput.trim()) {
+      setRemoteUrlError('Please enter a valid GitHub repository URL.');
+      return;
+    }
+    setIsConfiguringRemote(true);
+    setRemoteUrlError(null);
+    vscode.postMessage({
+      type: 'SET_REMOTE_URL',
+      url: remoteUrlInput.trim(),
+      remote: 'origin',
+      autoPush: true
+    });
+  };
 
   const allDirtyFiles = status
     ? Array.from(new Set([...status.staged, ...status.modified, ...status.untracked]))
@@ -361,6 +498,32 @@ export const App: React.FC = () => {
     setShowCloudSyncModal(false);
   };
 
+  // Phase 1 Handlers: Safe Mode & Identity Airbag
+  const handleInitRepo = () => {
+    setIsInitializingRepo(true);
+    vscode.postMessage({ type: 'INIT_REPO' });
+  };
+
+  const handleSaveIdentityAndCommit = () => {
+    if (!authorNameInput.trim()) {
+      setIdentityError('Please enter a display name or nickname.');
+      return;
+    }
+    if (!authorEmailInput.trim() || !authorEmailInput.includes('@')) {
+      setIdentityError('Please enter a valid email address (e.g. user@example.com).');
+      return;
+    }
+    setIdentityError(null);
+    setShowIdentityModal(false);
+
+    vscode.postMessage({
+      type: 'SAFE_COMMIT',
+      message: pendingCommitMessage.trim() || commitMessage.trim(),
+      authorName: authorNameInput.trim(),
+      authorEmail: authorEmailInput.trim()
+    });
+  };
+
   // Plain-English Handlers
   const handleQuickCommit = () => {
     if (!commitMessage.trim()) {
@@ -469,6 +632,9 @@ export const App: React.FC = () => {
     setConfirmModal({
       title: `⏪ Rewind Workspace to: "${cleanName}"`,
       description: `Restore your files to the state captured at ${new Date(snap.timestamp).toLocaleTimeString()}.`,
+      safetyGuarantee: 'GitWizard automatically captures a safety snapshot of your current screen before rewinding. You can return to your exact current work at any time.',
+      isLoadingDiff: true,
+      affectedFiles: [],
       consequences: [
         'A safety backup of your CURRENT workspace will be created first.',
         'Files modified since this checkpoint will be replaced by the checkpoint version.',
@@ -482,6 +648,11 @@ export const App: React.FC = () => {
         });
         setConfirmModal(null);
       }
+    });
+
+    vscode.postMessage({
+      type: 'PREVIEW_SNAPSHOT_DIFF',
+      snapshotId: snap.id
     });
   };
 
@@ -549,6 +720,257 @@ export const App: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12px' }}>
+      {/* Git Author Identity Modal */}
+      {showIdentityModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10005,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid var(--vscode-focusBorder, #007acc)',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '360px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>👤</span> Author Identity Needed
+            </div>
+            <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
+              Who should get credit for your work? Git needs a display name and email to save your work history on your computer.
+            </div>
+
+            {identityError && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid #ef4444',
+                  color: '#fca5a5',
+                  padding: '6px 8px',
+                  borderRadius: '4px',
+                  fontSize: '11px'
+                }}
+              >
+                {identityError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
+                <label style={{ fontSize: '11px', opacity: 0.85, display: 'block', marginBottom: '3px' }}>
+                  Your Name or Nickname:
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Alex"
+                  value={authorNameInput}
+                  onChange={(e) => setAuthorNameInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    background: 'var(--vscode-input-background)',
+                    color: 'var(--vscode-input-foreground)',
+                    border: '1px solid var(--vscode-input-border)',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', opacity: 0.85, display: 'block', marginBottom: '3px' }}>
+                  Your Email:
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. alex@example.com"
+                  value={authorEmailInput}
+                  onChange={(e) => setAuthorEmailInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    background: 'var(--vscode-input-background)',
+                    color: 'var(--vscode-input-foreground)',
+                    border: '1px solid var(--vscode-input-border)',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button
+                onClick={() => {
+                  setShowIdentityModal(false);
+                  setIdentityError(null);
+                }}
+                style={{
+                  padding: '6px 12px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveIdentityAndCommit}
+                style={{
+                  padding: '6px 14px',
+                  background: 'var(--vscode-button-background, #007acc)',
+                  color: 'var(--vscode-button-foreground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Save & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GitHub Connect Remote Modal (Phase 4) */}
+      {showConnectRemoteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10006,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid #3b82f6',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '380px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(59, 130, 246, 0.35)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93c5fd', fontWeight: 700, fontSize: '13px' }}>
+              <span>☁️</span> Connect to GitHub (Cloud Backup)
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
+              Your saves are currently safe on your computer. Connect a remote GitHub repository to enable 1-click cloud sync, offsite backups, and collaboration.
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '6px',
+                padding: '8px 10px',
+                fontSize: '11px',
+                lineHeight: '1.4'
+              }}
+            >
+              💡 <b>Tip</b>: Create a new repository at <code>github.com/new</code>, then paste its HTTPS clone URL below.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600 }}>GitHub Repository URL:</label>
+              <input
+                type="text"
+                placeholder="https://github.com/your-username/your-repo.git"
+                value={remoteUrlInput}
+                onChange={(e) => setRemoteUrlInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleConnectRemote()}
+                style={{
+                  padding: '7px 8px',
+                  background: 'var(--vscode-input-background)',
+                  color: 'var(--vscode-input-foreground)',
+                  border: '1px solid var(--vscode-input-border)',
+                  borderRadius: '4px',
+                  fontSize: '11px'
+                }}
+              />
+              {remoteUrlError && (
+                <div style={{ color: '#fca5a5', fontSize: '10px', marginTop: '2px' }}>
+                  {remoteUrlError}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+              <button
+                onClick={() => {
+                  setShowConnectRemoteModal(false);
+                  setRemoteUrlError(null);
+                }}
+                style={{
+                  padding: '6px 12px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConnectRemote}
+                disabled={isConfiguringRemote}
+                style={{
+                  padding: '6px 14px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  cursor: isConfiguringRemote ? 'not-allowed' : 'pointer',
+                  fontSize: '11px',
+                  boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)'
+                }}
+              >
+                {isConfiguringRemote ? 'Connecting...' : '🔗 Connect & Back Up (1-Click)'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal Overlay */}
       {confirmModal && (
         <div
@@ -584,6 +1006,87 @@ export const App: React.FC = () => {
               {confirmModal.title}
             </div>
             <div style={{ opacity: 0.9, lineHeight: '1.4' }}>{confirmModal.description}</div>
+
+            {confirmModal.safetyGuarantee && (
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: '6px',
+                  padding: '8px 10px',
+                  fontSize: '11px',
+                  color: '#6ee7b7',
+                  lineHeight: '1.4'
+                }}
+              >
+                🛡️ <b>Safe Rewind Guarantee</b>: {confirmModal.safetyGuarantee}
+              </div>
+            )}
+
+            {confirmModal.isLoadingDiff ? (
+              <div style={{ fontSize: '11px', opacity: 0.7, padding: '4px 0' }}>
+                ⏳ Scanning affected files...
+              </div>
+            ) : confirmModal.affectedFiles && confirmModal.affectedFiles.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.85 }}>
+                  📄 Affected Files ({confirmModal.affectedFiles.length}):
+                </div>
+                <div
+                  style={{
+                    maxHeight: '120px',
+                    overflowY: 'auto',
+                    background: 'rgba(0, 0, 0, 0.2)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '4px',
+                    padding: '4px 6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}
+                >
+                  {confirmModal.affectedFiles.map((f, idx) => {
+                    const cat = getFileCategory(f.path);
+                    const badge = getCategoryBadge(cat);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '6px',
+                          fontSize: '10px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
+                          <span
+                            style={{
+                              background: badge.bg,
+                              color: badge.color,
+                              fontSize: '9px',
+                              padding: '1px 5px',
+                              borderRadius: '3px',
+                              fontWeight: 600
+                            }}
+                          >
+                            {badge.icon} {badge.label}
+                          </span>
+                          <span style={{ fontFamily: 'monospace', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {f.path}
+                          </span>
+                        </div>
+                        {f.status && (
+                          <span style={{ opacity: 0.6, fontSize: '9px', textTransform: 'capitalize' }}>
+                            {f.status}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             
             <div
               style={{
@@ -1146,6 +1649,227 @@ export const App: React.FC = () => {
         </div>
       )}
 
+      {/* Settings Modal (Phase 2 Ergonomics) */}
+      {showSettingsModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-editor-background, #1e1e1e)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '360px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>⚙️</span> Assistant & AI Settings
+              </div>
+              <button
+                onClick={() => {
+                  setShowSettingsModal(false);
+                  setSettingsReason(null);
+                  setConnectionFeedback(null);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--vscode-foreground)',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  opacity: 0.7
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {settingsReason && (
+              <div
+                style={{
+                  background: 'rgba(99, 102, 241, 0.12)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  borderRadius: '4px',
+                  padding: '6px 8px',
+                  fontSize: '11px',
+                  color: '#c7d2fe',
+                  lineHeight: '1.4'
+                }}
+              >
+                💡 {settingsReason}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, opacity: 0.85 }}>AI Provider:</label>
+              <select
+                value={settingsProvider}
+                onChange={(e) => {
+                  const prov = e.target.value as 'gemini' | 'openai' | 'ollama';
+                  setSettingsProvider(prov);
+                  setConnectionFeedback(null);
+                }}
+                style={{
+                  padding: '6px',
+                  background: 'var(--vscode-dropdown-background)',
+                  color: 'var(--vscode-dropdown-foreground)',
+                  border: '1px solid var(--vscode-dropdown-border)',
+                  borderRadius: '4px',
+                  fontSize: '11px'
+                }}
+              >
+                <option value="gemini">Google Gemini (Recommended — Free Tier)</option>
+                <option value="openai">OpenAI (gpt-4o-mini)</option>
+                <option value="ollama">Local Ollama (100% Offline)</option>
+              </select>
+            </div>
+
+            {settingsProvider !== 'ollama' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, opacity: 0.85 }}>
+                  {settingsProvider === 'gemini' ? 'Gemini API Key' : 'OpenAI API Key'}:
+                </label>
+                <input
+                  type="password"
+                  placeholder={hasConfiguredKey && maskedKey ? `Configured (${maskedKey})` : (settingsProvider === 'gemini' ? 'AIzaSy...' : 'sk-...')}
+                  value={settingsApiKey}
+                  onChange={(e) => setSettingsApiKey(e.target.value)}
+                  style={{
+                    padding: '6px 8px',
+                    background: 'var(--vscode-input-background)',
+                    color: 'var(--vscode-input-foreground)',
+                    border: '1px solid var(--vscode-input-border)',
+                    borderRadius: '4px',
+                    fontSize: '11px'
+                  }}
+                />
+                {settingsProvider === 'gemini' && (
+                  <div style={{ fontSize: '10px', opacity: 0.75, lineHeight: '1.3' }}>
+                    ✨ Gemini has a generous free tier with zero card required at <code>aistudio.google.com</code>.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', opacity: 0.85 }}>Ollama Base URL:</label>
+                  <input
+                    type="text"
+                    value={settingsBaseUrl}
+                    onChange={(e) => setSettingsBaseUrl(e.target.value)}
+                    style={{
+                      padding: '5px 8px',
+                      background: 'var(--vscode-input-background)',
+                      color: 'var(--vscode-input-foreground)',
+                      border: '1px solid var(--vscode-input-border)',
+                      borderRadius: '4px',
+                      fontSize: '11px'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', opacity: 0.85 }}>Ollama Model:</label>
+                  <input
+                    type="text"
+                    value={settingsModel}
+                    onChange={(e) => setSettingsModel(e.target.value)}
+                    style={{
+                      padding: '5px 8px',
+                      background: 'var(--vscode-input-background)',
+                      color: 'var(--vscode-input-foreground)',
+                      border: '1px solid var(--vscode-input-border)',
+                      borderRadius: '4px',
+                      fontSize: '11px'
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.75 }}>
+                  🛡️ Runs entirely on your local machine with zero external network requests.
+                </div>
+              </div>
+            )}
+
+            {connectionFeedback && (
+              <div
+                style={{
+                  background: connectionFeedback.success ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                  border: `1px solid ${connectionFeedback.success ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                  color: connectionFeedback.success ? '#34d399' : '#fca5a5',
+                  padding: '6px 8px',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  lineHeight: '1.3'
+                }}
+              >
+                {connectionFeedback.message}
+              </div>
+            )}
+
+            {settingsToast && (
+              <div style={{ color: '#a7f3d0', fontSize: '11px', textAlign: 'center', fontWeight: 600 }}>
+                {settingsToast}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button
+                onClick={handleTestConnection}
+                disabled={isTestingConnection}
+                style={{
+                  flex: 1,
+                  padding: '6px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isTestingConnection ? 'not-allowed' : 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 600
+                }}
+              >
+                {isTestingConnection ? 'Testing...' : '🔌 Test Connection'}
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                style={{
+                  flex: 1,
+                  padding: '6px',
+                  background: 'var(--vscode-button-background)',
+                  color: 'var(--vscode-button-foreground)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 600
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Secret Radar Alert Modal */}
       {secretRadarAlert && (
         <div
@@ -1178,11 +1902,11 @@ export const App: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 700, fontSize: '13px' }}>
-              <span>🚨</span> Pre-Flight Secret Radar Alert
+              <span>🔒</span> Private API Key Protected
             </div>
 
             <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
-              GitWizard detected {secretRadarAlert.secrets.length} sensitive credential(s) in your changes that would be committed:
+              GitWizard noticed {secretRadarAlert.secrets.length} private credential(s) in your changes. Let's keep them safe so they never leak online:
             </div>
 
             <div
@@ -1227,7 +1951,7 @@ export const App: React.FC = () => {
                   boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
                 }}
               >
-                🔒 Extract to .env & Add to .gitignore (1-Click)
+                🔒 Protect Key: Move to .env & Add to .gitignore (1-Click)
               </button>
 
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
@@ -1258,7 +1982,7 @@ export const App: React.FC = () => {
                     opacity: 0.8
                   }}
                 >
-                  Commit Anyway
+                  Save Anyway
                 </button>
               </div>
             </div>
@@ -1298,11 +2022,11 @@ export const App: React.FC = () => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24', fontWeight: 700, fontSize: '13px' }}>
-              <span>🛡️</span> Production Branch Guard
+              <span>🛡️</span> Live Website Protection
             </div>
 
             <div style={{ fontSize: '11px', opacity: 0.9, lineHeight: '1.4' }}>
-              Direct commits on <code>{status?.branch || 'main'}</code> are guarded to prevent accidental production breakages.
+              You're currently working directly on <code>{status?.branch || 'main'}</code> (your live code). To avoid breaking what users see, GitWizard recommends creating a safe playground branch first.
             </div>
 
             <div
@@ -1315,7 +2039,7 @@ export const App: React.FC = () => {
                 lineHeight: '1.4'
               }}
             >
-              💡 <b>Recommended</b>: Let GitWizard automatically create a feature branch and move all your changes there with 1-click.
+              💡 <b>Recommended</b>: Let GitWizard move your changes into a dedicated branch so you can experiment freely.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
@@ -1333,7 +2057,7 @@ export const App: React.FC = () => {
                   boxShadow: '0 2px 8px rgba(59,130,246,0.3)'
                 }}
               >
-                🌿 Create "{branchGuardAlert.suggestedFeatureBranch}" Instead
+                🌿 Save to "{branchGuardAlert.suggestedFeatureBranch}" (Safe)
               </button>
 
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
@@ -1364,7 +2088,7 @@ export const App: React.FC = () => {
                     opacity: 0.8
                   }}
                 >
-                  Commit to {status?.branch || 'main'} Anyway
+                  Save to {status?.branch || 'main'} Anyway
                 </button>
               </div>
             </div>
@@ -1390,7 +2114,30 @@ export const App: React.FC = () => {
             GITWIZARD
           </span>
         </div>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            onClick={() => {
+              setSettingsReason(null);
+              setConnectionFeedback(null);
+              vscode.postMessage({ type: 'GET_AI_CONFIG' });
+              setShowSettingsModal(true);
+            }}
+            style={{
+              padding: '2px 7px',
+              fontSize: '11px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '4px',
+              color: 'var(--vscode-foreground)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px'
+            }}
+            title="Assistant & AI Settings"
+          >
+            ⚙️
+          </button>
           {proStatus?.status === 'active_license' ? (
             <span
               onClick={() => setShowLicenseModal(true)}
@@ -1444,57 +2191,126 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Top Status Card */}
-      <div
-        style={{
-          background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.06))',
-          padding: '10px 12px',
-          borderRadius: '6px',
-          border: '1px solid var(--vscode-widget-border, rgba(255,255,255,0.1))'
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: '11px', opacity: 0.7 }}>CURRENT BRANCH</div>
-            <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--vscode-textLink-foreground)' }}>
-              🌿 {status?.branch || 'main'}
+      {/* Top Status Card or Uninitialized Hero */}
+      {status?.isRepo === false ? (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.4)',
+            borderRadius: '8px',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '24px' }}>🪄</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: '#c7d2fe' }}>
+                Turn On GitWizard Safe Mode
+              </div>
+              <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
+                This project is not tracked by Git yet. Enable Safe Mode to turn on automatic time travel and safety backups.
+              </div>
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <span
-              style={{
-                fontSize: '11px',
-                padding: '3px 8px',
-                borderRadius: '10px',
-                fontWeight: 600,
-                background: allDirtyFiles.length > 0 ? 'var(--vscode-inputValidation-warningBackground, #855a00)' : 'var(--vscode-testing-iconPassed, #388a34)',
-                color: '#fff'
-              }}
-            >
-              {allDirtyFiles.length > 0 ? `🟡 ${allDirtyFiles.length} files dirty` : '🟢 Workspace Clean'}
-            </span>
-          </div>
-        </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-          <button
-            onClick={handleInstantManualSave}
-            title="Take an instant safety snapshot before prompting AI"
+          <div
             style={{
-              flex: 1,
-              padding: '5px',
+              background: 'rgba(0,0,0,0.25)',
+              borderRadius: '6px',
+              padding: '10px',
               fontSize: '11px',
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: 'var(--vscode-foreground)',
-              borderRadius: '4px',
-              cursor: 'pointer'
+              lineHeight: '1.4',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px'
             }}
           >
-            📸 Quick Snapshot
+            <div style={{ fontWeight: 600, color: '#a5b4fc' }}>🛡️ What Safe Mode does for you:</div>
+            <div>• <b>Zero lost code</b>: Automatically captures checkpoints before AI edits.</div>
+            <div>• <b>1-click undo</b>: Rewind safely when an AI prompt breaks your layout.</div>
+            <div>• <b>Secret radar</b>: Shields your API keys from leaking to GitHub.</div>
+          </div>
+
+          <button
+            onClick={handleInitRepo}
+            disabled={isInitializingRepo}
+            style={{
+              padding: '9px 14px',
+              background: isInitializingRepo
+                ? 'rgba(255,255,255,0.1)'
+                : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: 700,
+              fontSize: '12px',
+              cursor: isInitializingRepo ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: '0 2px 10px rgba(99,102,241,0.35)'
+            }}
+          >
+            {isInitializingRepo ? '⏳ Enabling Safe Mode...' : '✨ Enable Safe Mode (1-Click)'}
           </button>
         </div>
-      </div>
+      ) : (
+        <div
+          style={{
+            background: 'var(--vscode-editor-inactiveSelectionBackground, rgba(255,255,255,0.06))',
+            padding: '10px 12px',
+            borderRadius: '6px',
+            border: '1px solid var(--vscode-widget-border, rgba(255,255,255,0.1))'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '11px', opacity: 0.7 }}>CURRENT BRANCH</div>
+              <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--vscode-textLink-foreground)' }}>
+                🌿 {status?.branch || 'main'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '3px 8px',
+                  borderRadius: '10px',
+                  fontWeight: 600,
+                  background: allDirtyFiles.length > 0 ? 'var(--vscode-inputValidation-warningBackground, #855a00)' : 'var(--vscode-testing-iconPassed, #388a34)',
+                  color: '#fff'
+                }}
+              >
+                {allDirtyFiles.length > 0 ? `🟡 ${allDirtyFiles.length} files dirty` : '🟢 Workspace Clean'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <button
+              onClick={handleInstantManualSave}
+              title="Take an instant safety snapshot before prompting AI"
+              style={{
+                flex: 1,
+                padding: '5px',
+                fontSize: '11px',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: 'var(--vscode-foreground)',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              📸 Quick Snapshot
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Active Merge Conflicts Banner */}
       {status?.conflicted && status.conflicted.length > 0 && (
@@ -1682,11 +2498,15 @@ export const App: React.FC = () => {
                 color: 'var(--vscode-button-foreground)',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: allDirtyFiles.length > 0 ? 'pointer' : 'not-allowed',
+                cursor: status?.isRepo === false || allDirtyFiles.length > 0 ? 'pointer' : 'not-allowed',
                 fontWeight: 600
               }}
             >
-              {allDirtyFiles.length > 0 ? `💾 Save ${allDirtyFiles.length} Modified File(s)` : 'No Changes to Save'}
+              {status?.isRepo === false
+                ? '🪄 Enable Safe Mode to Save Changes'
+                : allDirtyFiles.length > 0
+                ? `💾 Save ${allDirtyFiles.length} Modified File(s)`
+                : 'No Changes to Save'}
             </button>
           </div>
 
@@ -1965,7 +2785,7 @@ export const App: React.FC = () => {
             {actions.length > 0 && (
               <>
                 <div style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8, marginTop: '10px' }}>
-                  📜 Recent Git History:
+                  🕒 Recent Activity:
                 </div>
                 <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {actions.map((act, i) => (
@@ -1973,13 +2793,22 @@ export const App: React.FC = () => {
                       key={i}
                       style={{
                         fontSize: '10px',
-                        opacity: 0.8,
-                        padding: '4px 6px',
-                        background: 'rgba(255,255,255,0.02)',
-                        borderRadius: '4px'
+                        opacity: 0.85,
+                        padding: '5px 8px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '6px'
                       }}
                     >
-                      <span style={{ fontWeight: 600, color: 'var(--vscode-textLink-foreground)' }}>{act.selector}</span>: {act.title}
+                      <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {act.title}
+                      </span>
+                      <span style={{ fontSize: '9px', opacity: 0.6, flexShrink: 0 }}>
+                        {act.relativeTime || 'Recently'}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -2110,21 +2939,144 @@ export const App: React.FC = () => {
                 />
               </div>
 
+              {/* Semantic 1-Click Filters */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = { ...selectedForA };
+                    allDirtyFiles.forEach(f => {
+                      if (getFileCategory(f) === 'ui') next[f] = true;
+                    });
+                    setSelectedForA(next);
+                  }}
+                  style={{
+                    padding: '3px 7px',
+                    fontSize: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(236, 72, 153, 0.3)',
+                    background: 'rgba(236, 72, 153, 0.1)',
+                    color: '#f472b6',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                  title="Select all frontend UI, styling & template files for Branch A"
+                >
+                  🎨 All UI ({allDirtyFiles.filter(f => getFileCategory(f) === 'ui').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = { ...selectedForA };
+                    allDirtyFiles.forEach(f => {
+                      if (getFileCategory(f) === 'backend') next[f] = true;
+                    });
+                    setSelectedForA(next);
+                  }}
+                  style={{
+                    padding: '3px 7px',
+                    fontSize: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    color: '#93c5fd',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                  title="Select all backend, API, routes, and database files for Branch A"
+                >
+                  ⚙️ All Backend ({allDirtyFiles.filter(f => getFileCategory(f) === 'backend').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    allDirtyFiles.forEach(f => {
+                      next[f] = !selectedForA[f];
+                    });
+                    setSelectedForA(next);
+                  }}
+                  style={{
+                    padding: '3px 7px',
+                    fontSize: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: 'var(--vscode-foreground)',
+                    cursor: 'pointer'
+                  }}
+                  title="Invert current selection"
+                >
+                  🔄 Invert
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedForA({})}
+                  style={{
+                    padding: '3px 7px',
+                    fontSize: '10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--vscode-foreground)',
+                    opacity: 0.6,
+                    cursor: 'pointer'
+                  }}
+                  title="Uncheck all files"
+                >
+                  Clear
+                </button>
+              </div>
+
               {/* Visual File Selection Checklist */}
-              <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', padding: '6px', borderRadius: '4px' }}>
+              <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', padding: '6px', borderRadius: '4px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>
                   Select files to place into Branch A (unselected go to Branch B):
                 </div>
-                {allDirtyFiles.map((file) => (
-                  <label key={file} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', padding: '3px 0' }}>
-                    <input
-                      type="checkbox"
-                      checked={!!selectedForA[file]}
-                      onChange={(e) => setSelectedForA({ ...selectedForA, [file]: e.target.checked })}
-                    />
-                    <span style={{ fontFamily: 'monospace' }}>{file}</span>
-                  </label>
-                ))}
+                {allDirtyFiles.map((file) => {
+                  const cat = getFileCategory(file);
+                  const badge = getCategoryBadge(cat);
+                  return (
+                    <label
+                      key={file}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '6px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        padding: '3px 4px',
+                        borderRadius: '3px',
+                        background: selectedForA[file] ? 'rgba(99, 102, 241, 0.1)' : 'transparent'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!selectedForA[file]}
+                          onChange={(e) => setSelectedForA({ ...selectedForA, [file]: e.target.checked })}
+                        />
+                        <span style={{ fontFamily: 'monospace', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {file}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          background: badge.bg,
+                          color: badge.color,
+                          fontSize: '9px',
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          fontWeight: 600,
+                          flexShrink: 0
+                        }}
+                      >
+                        {badge.icon} {badge.label}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
 
               {/* Branch B Config */}
@@ -2215,6 +3167,46 @@ export const App: React.FC = () => {
               </label>
             </div>
           </div>
+
+          {splitRepoFallbackUrl && (
+            <div
+              style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '6px',
+                padding: '10px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}
+            >
+              <div style={{ fontWeight: 600, color: '#93c5fd', fontSize: '11px' }}>
+                🌐 GitHub CLI Not Detected
+              </div>
+              <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: '1.4' }}>
+                You can create "{promoteRepoName}" on GitHub in 1 click using your browser, then link its URL below:
+              </div>
+              <a
+                href={splitRepoFallbackUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  padding: '6px',
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                  fontSize: '11px',
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                🌐 Open GitHub in Browser to Create Repo
+              </a>
+            </div>
+          )}
 
           <button
             onClick={handlePromoteToNewRepo}

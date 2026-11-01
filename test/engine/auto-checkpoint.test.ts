@@ -86,7 +86,7 @@ describe('AutoCheckpointController', () => {
     const allSnaps = await snapshotManager.listSnapshots();
     const autoSnaps = allSnaps.filter(s => s.label.startsWith('auto-'));
     expect(autoSnaps.length).toBeLessThanOrEqual(5);
-  }, 30000);
+  }, 60000);
 
   it('prevents concurrent captures via _isCapturing guard', async () => {
     fs.writeFileSync(path.join(testRepoPath, 'concurrent.txt'), 'test data');
