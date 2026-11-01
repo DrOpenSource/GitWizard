@@ -180,9 +180,31 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           try {
             const snap = await this._checkpointWizard.saveCheckpoint(data.label || 'checkpoint');
             vscode.window.showInformationMessage(`GitWizard: Checkpoint '${snap.label}' captured!`);
+            this._view?.webview.postMessage({
+              type: 'CHECKPOINT_CREATED',
+              snapshot: snap
+            });
             await this.broadcastStatus();
           } catch (err: any) {
             vscode.window.showErrorMessage(`GitWizard Error: ${err.message}`);
+            this._view?.webview.postMessage({
+              type: 'CHECKPOINT_ERROR',
+              error: err.message
+            });
+          }
+          break;
+        }
+
+        case 'SHOW_WARNING': {
+          if (data.message) {
+            vscode.window.showWarningMessage(`GitWizard: ${data.message}`);
+          }
+          break;
+        }
+
+        case 'SHOW_ERROR': {
+          if (data.message) {
+            vscode.window.showErrorMessage(`GitWizard: ${data.message}`);
           }
           break;
         }

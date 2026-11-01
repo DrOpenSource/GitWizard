@@ -79,5 +79,14 @@ describe('CheckpointWizard', () => {
     const listAfter = await wizard.listCheckpoints();
     expect(listAfter.some(c => c.id === snap.id)).toBe(false);
   });
+
+  it('creates quick snapshots with custom or default labels safely without user prompt dependency', async () => {
+    const quickSnap = await wizard.saveCheckpoint('Quick Snapshot (14:30)');
+    expect(quickSnap.label).toBe('Quick Snapshot (14:30)');
+    expect(quickSnap.id).toBeDefined();
+
+    const emptySnap = await wizard.saveCheckpoint('   ');
+    expect(emptySnap.label).toBe('vibe-save');
+  });
 });
 

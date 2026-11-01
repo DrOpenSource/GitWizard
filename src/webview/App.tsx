@@ -88,6 +88,8 @@ export const App: React.FC = () => {
   const [localBranches, setLocalBranches] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'daily' | 'timeline' | 'split' | 'promote' | 'playbook'>('daily');
   const [playbookFilter, setPlaybookFilter] = useState<PlaybookCategory>('all');
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+  const [snapshotSuccessFeedback, setSnapshotSuccessFeedback] = useState<string | null>(null);
 
   // Pro State
   const [proStatus, setProStatus] = useState<LicenseStatus | null>(null);
@@ -535,7 +537,7 @@ export const App: React.FC = () => {
   // Plain-English Handlers
   const handleQuickCommit = () => {
     if (!commitMessage.trim()) {
-      alert('Please write a short description of what you changed.');
+      vscode.postMessage({ type: 'SHOW_WARNING', message: 'Please write a short description of what you changed before saving.' });
       return;
     }
     vscode.postMessage({
@@ -595,7 +597,7 @@ export const App: React.FC = () => {
 
   const handleCreateBranch = () => {
     if (!newBranchName.trim()) {
-      alert('Please enter a branch name (e.g., feature/login).');
+      vscode.postMessage({ type: 'SHOW_WARNING', message: 'Please enter a branch name (e.g. feature/login).' });
       return;
     }
     vscode.postMessage({
@@ -624,13 +626,18 @@ export const App: React.FC = () => {
   };
 
   const handleInstantManualSave = () => {
-    const label = prompt('Name this checkpoint (e.g. before AI refactor):', 'manual-save');
-    if (label !== null) {
-      vscode.postMessage({
-        type: 'CREATE_CHECKPOINT',
-        label: label.trim() || 'manual-save'
-      });
+    if (status?.isRepo === false) {
+      handleInitRepo();
+      return;
     }
+    setIsCapturingSnapshot(true);
+    setSnapshotSuccessFeedback(null);
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    vscode.postMessage({
+      type: 'CREATE_CHECKPOINT',
+      label: `Quick Snapshot (${timeStr})`
+    });
   };
 
   const handleAskRestoreSnapshot = (snap: SnapshotMetadata) => {
@@ -669,11 +676,11 @@ export const App: React.FC = () => {
     const filesB = allDirtyFiles.filter((f) => !selectedForA[f]);
 
     if (filesA.length === 0) {
-      alert('Please select at least one file for Group A');
+      vscode.postMessage({ type: 'SHOW_WARNING', message: 'Please select at least one file for Group A.' });
       return;
     }
     if (filesB.length === 0) {
-      alert('Group B must also have at least one file.');
+      vscode.postMessage({ type: 'SHOW_WARNING', message: 'Group B must also have at least one file.' });
       return;
     }
 
@@ -2302,19 +2309,42 @@ export const App: React.FC = () => {
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <button
               onClick={handleInstantManualSave}
+              disabled={isCapturingSnapshot}
               title="Take an instant safety snapshot before prompting AI"
               style={{
                 flex: 1,
-                padding: '5px',
+                padding: '6px 10px',
                 fontSize: '11px',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                color: 'var(--vscode-foreground)',
+                fontWeight: 600,
+                background: snapshotSuccessFeedback
+                  ? 'rgba(34, 197, 94, 0.2)'
+                  : isCapturingSnapshot
+                  ? 'rgba(99, 102, 241, 0.2)'
+                  : 'rgba(255,255,255,0.08)',
+                border: snapshotSuccessFeedback
+                  ? '1px solid rgba(34, 197, 94, 0.4)'
+                  : isCapturingSnapshot
+                  ? '1px solid rgba(99, 102, 241, 0.4)'
+                  : '1px solid rgba(255,255,255,0.15)',
+                color: snapshotSuccessFeedback
+                  ? '#86efac'
+                  : isCapturingSnapshot
+                  ? '#c7d2fe'
+                  : 'var(--vscode-foreground)',
                 borderRadius: '4px',
-                cursor: 'pointer'
+                cursor: isCapturingSnapshot ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
               }}
             >
-              📸 Quick Snapshot
+              {isCapturingSnapshot
+                ? '⏳ Capturing Snapshot...'
+                : snapshotSuccessFeedback
+                ? `✅ ${snapshotSuccessFeedback}`
+                : '📸 Quick Snapshot'}
             </button>
           </div>
         </div>
