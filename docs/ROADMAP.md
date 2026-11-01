@@ -18,7 +18,7 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 | **Sprint 8: Pre-Flight Secret Radar & Branch Guard** | Sub-25ms secret scanning, 1-click .env remediation, protected branch intercept on `main` | Completed (Verified) |
 | **Sprint 9: Surgical File Rewind & AI Auto-Splitter** | Per-file rollback, multi-branch AST semantic clustering, 101 unit tests | Completed (Verified) |
 | **Sprint 10: Smart AI Conflict Resolver & Cloud Sync** | 3-way conflict resolver, AES-256 encrypted private cloud sync, v2.0.0 release | Completed (Verified) |
-| **Sprint 11: The Vibe-First UX Transformation** | 5-phase onboarding, empty state airbag, de-jargonization, guided GitHub sync, case study | In Progress |
+| **Sprint 11: The Vibe-First UX Transformation** | 5-phase onboarding, empty state airbag, de-jargonization, guided GitHub sync, Playbook guide | Completed (Verified) |
 
 ---
 
@@ -347,3 +347,8 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] Include animated walkthrough GIF placeholders and clear benefit-first copy.
 - [x] **Chunk 11.13: Case Study Milestone Verification (`docs/CASE_STUDY_PRODUCT_DESIGN.md`)**
   - [x] Update all 5 phase status badges and live metrics upon completion.
+- [x] **Chunk 11.14: Interactive Vibe Coder Playbook & Micro-Coaching (`src/wizards/playbook.ts` & `src/webview/App.tsx`)**
+  - [x] Implement dedicated `🧭 Playbook` tab with 6 visual scenario recipes covering repository initiation to merge conflicts.
+  - [x] Add 1-click interactive deep links from recipes to target tabs and features.
+  - [x] Embed subtle `💡 When to use` micro-coaching chips at the top of Everyday, Rewind, Split, and Repo tabs.
+  - [x] Add automated test coverage in `test/wizards/playbook.test.ts` (142/142 tests passing across all suites).

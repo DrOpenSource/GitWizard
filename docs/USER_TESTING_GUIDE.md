@@ -199,6 +199,23 @@
 
 ---
 
+### Scenario 11: Vibe Coder Playbook & Embedded Micro-Coaching
+**Goal**: Verify that non-technical vibe coders have instant access to what to do and when, without reading complex manuals.
+
+* **Step 1**: In the top navigation bar, click the new **`🧭 Playbook`** tab.
+* **Step 2**: Inspect the 6 visual scenario recipes:
+  - 🏁 Starting a New Project / Fresh Folder
+  - 💾 AI Just Generated Working Code
+  - ⏳ AI Hallucinated or Broke Your App
+  - ✂️ AI Touched 15+ Files Across UI and Backend
+  - ☁️ Backing Up to GitHub (Cloud Protection)
+  - ⚔️ Getting Teammate Updates / Resolving Conflicts
+* **Step 3**: Try clicking category filters (`[🚀 Setup]`, `[💾 Daily]`, `[🚨 Undo]`, `[✂️ Split]`, `[☁️ Cloud]`) to filter the cards.
+* **Step 4**: Click any recipe's action button (e.g., **`[⏳ Open Time Travel →]`**) and observe that it navigates directly to the target tab.
+* **Step 5**: Notice the subtle **`💡 When to use`** micro-guidance banner at the top of each tab (`⚡ Everyday`, `⏳ Rewind`, `✂️ Split`, `🚀 Repo`), with a 1-click **`[Playbook →]`** link back to the guide.
+
+---
+
 ## 🐞 Reporting Bugs or Edge Cases
 
 If you encounter any unexpected behavior during manual testing:

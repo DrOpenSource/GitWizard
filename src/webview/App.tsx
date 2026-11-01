@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getFileCategory, getCategoryBadge, FileCategory } from '../engine/file-category';
+import {
+  PLAYBOOK_RECIPES,
+  PLAYBOOK_GOLDEN_RULES,
+  TAB_MICRO_GUIDANCE,
+  PlaybookCategory,
+  getPlaybookRecipes
+} from '../wizards/playbook';
 
 declare function acquireVsCodeApi(): {
   postMessage(msg: any): void;
@@ -79,7 +86,8 @@ export const App: React.FC = () => {
   const [snapshots, setSnapshots] = useState<SnapshotMetadata[]>([]);
   const [actions, setActions] = useState<HumanGitAction[]>([]);
   const [localBranches, setLocalBranches] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'daily' | 'timeline' | 'split' | 'promote'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'timeline' | 'split' | 'promote' | 'playbook'>('daily');
+  const [playbookFilter, setPlaybookFilter] = useState<PlaybookCategory>('all');
 
   // Pro State
   const [proStatus, setProStatus] = useState<LicenseStatus | null>(null);
@@ -2380,27 +2388,32 @@ export const App: React.FC = () => {
       )}
 
       {/* Navigation Tabs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
         {[
           { id: 'daily', label: '⚡ Everyday' },
           { id: 'timeline', label: '⏳ Rewind' },
           { id: 'split', label: '✂️ Split' },
-          { id: 'promote', label: '🚀 Repo' }
+          { id: 'promote', label: '🚀 Repo' },
+          { id: 'playbook', label: '🧭 Playbook' }
         ].map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id as any)}
             style={{
-              padding: '7px 4px',
+              padding: '7px 2px',
               background: activeTab === t.id ? 'var(--vscode-button-background)' : 'transparent',
               color: activeTab === t.id ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
               border: '1px solid var(--vscode-button-border, rgba(255,255,255,0.15))',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontSize: '11px',
+              fontSize: '10.5px',
               fontWeight: 500,
-              textAlign: 'center'
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
             }}
+            title={t.id === 'playbook' ? 'Vibe Coder Playbook: What to do & when' : undefined}
           >
             {t.label}
           </button>
@@ -2410,6 +2423,37 @@ export const App: React.FC = () => {
       {/* TAB 1: EVERYDAY DECK */}
       {activeTab === 'daily' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Micro-Coaching Chip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(99, 102, 241, 0.08)',
+              border: '1px solid rgba(99, 102, 241, 0.2)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: '#c7d2fe'
+            }}
+          >
+            <span>{TAB_MICRO_GUIDANCE.daily}</span>
+            <button
+              onClick={() => setActiveTab('playbook')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#a5b4fc',
+                fontSize: '10.5px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: '0 0 0 8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Playbook →
+            </button>
+          </div>
           {/* Section: Save changes (Commit) */}
           <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -2638,6 +2682,37 @@ export const App: React.FC = () => {
       {/* TAB 2: VIRTUAL TIMELINE TREE */}
       {activeTab === 'timeline' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Micro-Coaching Chip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(245, 158, 11, 0.08)',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: '#fde68a'
+            }}
+          >
+            <span>{TAB_MICRO_GUIDANCE.timeline}</span>
+            <button
+              onClick={() => setActiveTab('playbook')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fcd34d',
+                fontSize: '10.5px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: '0 0 0 8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Playbook →
+            </button>
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, fontSize: '12px' }}>⏳ Retrospective Time Machine</span>
             <span style={{ fontSize: '10px', opacity: 0.6 }}>Passive Flight Recorder</span>
@@ -2821,6 +2896,37 @@ export const App: React.FC = () => {
       {/* TAB 3: VISUAL FILE SPLITTER */}
       {activeTab === 'split' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Micro-Coaching Chip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(168, 85, 247, 0.08)',
+              border: '1px solid rgba(168, 85, 247, 0.2)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: '#e9d5ff'
+            }}
+          >
+            <span>{TAB_MICRO_GUIDANCE.split}</span>
+            <button
+              onClick={() => setActiveTab('playbook')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#d8b4fe',
+                fontSize: '10.5px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: '0 0 0 8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Playbook →
+            </button>
+          </div>
           <p style={{ margin: 0, fontSize: '11px', opacity: 0.85 }}>
             AI modified multiple files at once? Divide them cleanly into separate feature branches.
           </p>
@@ -3123,6 +3229,37 @@ export const App: React.FC = () => {
       {/* TAB 4: PROMOTE TO NEW REPO */}
       {activeTab === 'promote' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* Micro-Coaching Chip */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: '#bfdbfe'
+            }}
+          >
+            <span>{TAB_MICRO_GUIDANCE.promote}</span>
+            <button
+              onClick={() => setActiveTab('playbook')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#93c5fd',
+                fontSize: '10.5px',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                padding: '0 0 0 8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Playbook →
+            </button>
+          </div>
           <p style={{ margin: 0, fontSize: '11px', opacity: 0.85 }}>
             Promote an experimental branch into its own brand new GitHub repository.
           </p>
@@ -3222,6 +3359,207 @@ export const App: React.FC = () => {
           >
             🚀 Publish Standalone Repository
           </button>
+        </div>
+      )}
+
+      {/* TAB 5: VIBE CODER PLAYBOOK */}
+      {activeTab === 'playbook' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Header Card */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              borderRadius: '8px',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🧭</span> Vibe Coder Playbook
+              </div>
+              <span
+                style={{
+                  fontSize: '9px',
+                  background: 'rgba(99, 102, 241, 0.25)',
+                  color: '#c7d2fe',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  fontWeight: 600
+                }}
+              >
+                Zero-Jargon Guide
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: '1.4' }}>
+              Simple rules for coding fast with AI with zero lost work. What to do and when:
+            </div>
+
+            {/* Quick Category Filters */}
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
+              {[
+                { id: 'all', label: 'All (6)' },
+                { id: 'setup', label: '🚀 Setup' },
+                { id: 'daily', label: '💾 Daily' },
+                { id: 'undo', label: '🚨 Undo' },
+                { id: 'split', label: '✂️ Split' },
+                { id: 'cloud', label: '☁️ Cloud' }
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setPlaybookFilter(f.id as any)}
+                  style={{
+                    padding: '3px 7px',
+                    fontSize: '10px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: playbookFilter === f.id ? 'var(--vscode-button-background)' : 'rgba(255,255,255,0.05)',
+                    color: playbookFilter === f.id ? 'var(--vscode-button-foreground)' : 'var(--vscode-foreground)',
+                    cursor: 'pointer',
+                    fontWeight: playbookFilter === f.id ? 600 : 400
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Recipe Cards List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {getPlaybookRecipes(playbookFilter).map((recipe) => (
+              <div
+                key={recipe.id}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '6px',
+                  padding: '10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                {/* Recipe Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontWeight: 600, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{recipe.icon}</span>
+                    <span>{recipe.title}</span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      opacity: 0.8
+                    }}
+                  >
+                    {recipe.categoryLabel}
+                  </span>
+                </div>
+
+                {/* When Section */}
+                <div
+                  style={{
+                    fontSize: '11px',
+                    background: 'rgba(0, 0, 0, 0.2)',
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    lineHeight: '1.4'
+                  }}
+                >
+                  <span style={{ color: '#93c5fd', fontWeight: 600 }}>When: </span>
+                  <span style={{ opacity: 0.9 }}>{recipe.when}</span>
+                </div>
+
+                {/* What To Do Section */}
+                <div style={{ fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <div style={{ fontWeight: 600, color: '#a5b4fc', fontSize: '10.5px' }}>
+                    📋 What to do:
+                  </div>
+                  {recipe.whatToDo.map((step, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', paddingLeft: '4px' }}>
+                      <span style={{ opacity: 0.6 }}>{idx + 1}.</span>
+                      <span style={{ opacity: 0.9, lineHeight: '1.4' }}>{step}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Why It Keeps You Safe */}
+                <div
+                  style={{
+                    fontSize: '10.5px',
+                    color: '#86efac',
+                    background: 'rgba(34, 197, 94, 0.08)',
+                    padding: '5px 8px',
+                    borderRadius: '4px',
+                    lineHeight: '1.3'
+                  }}
+                >
+                  🛡️ <b>Why you're safe</b>: {recipe.whyItKeepsYouSafe}
+                </div>
+
+                {/* Interactive Action Button */}
+                <button
+                  onClick={() => {
+                    setActiveTab(recipe.targetTab);
+                    if (recipe.id === 'init-project' && status?.isRepo === false) {
+                      handleInitRepo();
+                    } else if (recipe.id === 'cloud-backup') {
+                      setShowConnectRemoteModal(true);
+                    }
+                  }}
+                  style={{
+                    marginTop: '2px',
+                    padding: '6px 10px',
+                    background: 'var(--vscode-button-background)',
+                    color: 'var(--vscode-button-foreground)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {recipe.actionButtonText} →
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Golden Rules Footer */}
+          <div
+            style={{
+              marginTop: '4px',
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: '6px',
+              padding: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px'
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: '11px', color: '#fbbf24' }}>
+              🪄 The 3 Vibe Coder Golden Rules
+            </div>
+            {PLAYBOOK_GOLDEN_RULES.map((rule, idx) => (
+              <div key={idx} style={{ fontSize: '11px', lineHeight: '1.4', display: 'flex', gap: '6px' }}>
+                <span>{rule.icon}</span>
+                <div>
+                  <b style={{ color: 'var(--vscode-foreground)' }}>{rule.title}</b>: <span style={{ opacity: 0.85 }}>{rule.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
