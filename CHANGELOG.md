@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-11-02
+
+### Added
+- **Interactive Vibe Coder Playbook**: Dedicated `🧭 Playbook` tab with 6 visual scenario recipes covering repository initiation, AI prompt milestones, hallucinations, multi-file splitting, cloud backup, and conflict resolution.
+- **Contextual Micro-Coaching Chips**: Embedded `💡 When to use` guidance banners at the top of Everyday, Rewind, Split, and Repo tabs with deep linking into Playbook recipes.
+- **Instant Quick Snapshot**: Replaced modal `prompt()` with 1-click `📸 Quick Snapshot (HH:MM)` capture and animated in-button feedback state machine (`⏳ Capturing Snapshot...` → `✅ Saved HH:MM`).
+- **Native Notification System**: Replaced webview `alert()` popups with non-intrusive native VS Code warning toasts (`SHOW_WARNING`).
+- **5-Phase Vibe Coder UX Transformation**:
+  - Phase 1: 1-Click Safe Mode onboarding hero card for untracked folders; self-healing Git author identity airbag for missing `user.name` / `user.email`.
+  - Phase 2: In-sidebar ⚙️ Settings modal with live AI connection tester (`[🔌 Test Connection]`); humanized relative timestamps (`Just now`, `5 mins ago`) replacing `HEAD@{n}`.
+  - Phase 3: Semantic categorizer badges (`🎨 UI`, `⚙️ API/Backend`, `📄 Config`, `📝 Docs`) and 1-click `[🎨 All UI]` filters; visual consequence preview before rewind with safety backup guarantee.
+  - Phase 4: Guided GitHub cloud sync assistant preventing push errors on missing `origin`; graceful `gh` CLI fallback with pre-filled web repository link.
+  - Phase 5: Flesch-Kincaid Grade 7.6 plain-English marketplace rewrite with side-by-side Git CLI vs. GitWizard comparison table.
+
+### Changed
+- **Packaging & Bundle Optimization**: Production esbuild bundling with code minification, shrinking VSIX package size significantly.
+- **Hardened .vscodeignore**: Excluded CI workflows and internal agent documentation from extension distribution packages.
+
+---
+
+## [2.0.0] - 2026-11-01
+
+### Added
+- **GitWizard Pro Superpowers**:
+  - **Cryptographic Offline Licensing**: HMAC-SHA256 / Ed25519 lifetime license validation with 14-day zero-card trial.
+  - **AI Semantic Commit & PR Drafter**: Multi-provider support (Gemini, OpenAI, local Ollama) with diff pruning and conventional commit formatting.
+  - **Pre-Flight Secret Radar**: Sub-25ms regex catalog and Shannon entropy detector for 15+ API key types.
+  - **1-Click Secret Remediation**: Moves exposed API keys from code to `.env` and secures `.gitignore`.
+  - **Production Branch Guard**: Intercepts direct commits on `main` and relocates changes to feature branches in 1 click.
+  - **Surgical Single-File Rewind**: Reverts single damaged files from snapshots while keeping other dirty files intact.
+  - **AI Semantic Multi-Branch Splitter**: Clusters multi-file AI prompt diffs into distinct PR branches.
+  - **3-Way AI Conflict Resolver**: Synthesizes BASE/OURS/THEIRS merge conflicts into clean code without conflict markers.
+  - **Private GitHub Cloud Sync Bridge**: Client-side AES-256-GCM encrypted snapshot sync to `refs/gitwizard/cloud-sync`.
+
+---
+
 ## [1.0.0] - 2026-10-23
 
 ### Added

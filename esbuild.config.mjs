@@ -10,7 +10,8 @@ const extensionConfig = {
   external: ['vscode'],
   format: 'cjs',
   platform: 'node',
-  sourcemap: true,
+  sourcemap: isWatch,
+  minify: !isWatch,
   target: 'node18'
 };
 
@@ -21,7 +22,8 @@ const webviewConfig = {
   outfile: 'dist/webview.js',
   format: 'iife',
   platform: 'browser',
-  sourcemap: true,
+  sourcemap: isWatch,
+  minify: !isWatch,
   target: 'es2022'
 };
 

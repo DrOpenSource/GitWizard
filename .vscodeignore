@@ -1,4 +1,5 @@
 .agents/**
+.github/**
 docs/**
 src/**
 test/**
@@ -8,3 +9,7 @@ tsconfig.json
 vitest.config.ts
 esbuild.config.mjs
 node_modules/**
+AGENTS.md
+*.vsix
+**/*.map
+extension/**
