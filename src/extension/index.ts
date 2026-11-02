@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import path from 'node:path';
 import { GitClient } from '../engine/git-client';
 import { SnapshotManager } from '../engine/snapshot';
 import { TransactionRunner } from '../engine/transaction';
@@ -19,6 +20,7 @@ import { FileRewindEngine } from '../pro/file-rewind';
 import { AISplitterEngine } from '../pro/ai-splitter';
 import { ConflictResolverEngine, ConflictResolution } from '../pro/conflict-resolver';
 import { CloudSyncEngine } from '../pro/cloud-sync';
+import { PullRequestWizard } from '../wizards/pr';
 
 class VSCodeLicenseStorage implements LicenseStorage {
   constructor(private readonly memento: vscode.Memento) {}
@@ -43,6 +45,17 @@ function getActiveAIConfig(): AIModelConfig {
   const model = config.get<string>('ollamaModel') || (provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'llama3.2');
 
   return { provider, apiKey, baseUrl, model };
+}
+
+
+class SnapshotContentProvider implements vscode.TextDocumentContentProvider {
+  constructor(private readonly snapshotManager: SnapshotManager) {}
+
+  async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+    const snapshotId = uri.authority;
+    const filePath = uri.path.replace(/^\//, '');
+    return await this.snapshotManager.getFileContent(snapshotId, filePath);
+  }
 }
 
 class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
@@ -70,6 +83,7 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
     private readonly _aiSplitter: AISplitterEngine,
     private readonly _conflictResolver: ConflictResolverEngine,
     private readonly _cloudSync: CloudSyncEngine,
+    private readonly _prWizard: PullRequestWizard,
     private readonly _updateStatusBar: () => Promise<void>
   ) {}
 
@@ -789,6 +803,76 @@ class GitWizardSidebarProvider implements vscode.WebviewViewProvider {
           }
           break;
         }
+
+        case 'OPEN_SNAPSHOT_DIFF': {
+          try {
+            const { snapshotId, snapshotLabel, filePath } = data;
+            if (!snapshotId || !filePath) break;
+            const normalizedPath = filePath.replace(/\\/g, '/');
+            const leftUri = vscode.Uri.parse(`gitwizard-snapshot://${snapshotId}/${normalizedPath}`);
+            const rightUri = vscode.Uri.file(path.join(this._git.repoPath, filePath));
+            const title = `${path.basename(filePath)} (${snapshotLabel || 'Snapshot'}) ↔ (Current Workspace)`;
+            await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard Error: Could not open diff: ${err.message}`);
+          }
+          break;
+        }
+
+        case 'GENERATE_PR_SUMMARY': {
+          try {
+            this._aiService.updateConfig(getActiveAIConfig());
+            const prDesc = await this._aiCommitWizard.generatePRDescription(data.baseBranch || 'main');
+            this._view?.webview.postMessage({
+              type: 'PR_SUMMARY_GENERATED',
+              title: prDesc.title,
+              body: prDesc.body,
+              error: prDesc.error
+            });
+          } catch (err: any) {
+            this._view?.webview.postMessage({
+              type: 'PR_SUMMARY_GENERATED',
+              error: err.message
+            });
+          }
+          break;
+        }
+
+        case 'CREATE_PULL_REQUEST': {
+          try {
+            vscode.window.showInformationMessage('GitWizard: Preparing Pull Request on GitHub...');
+            this._aiService.updateConfig(getActiveAIConfig());
+            const res = await this._prWizard.createPullRequest({
+              baseBranch: data.baseBranch || 'main',
+              headBranch: data.headBranch,
+              title: data.title,
+              body: data.body,
+              generateWithAI: true
+            });
+
+            if (res.success && res.prUrl) {
+              await vscode.env.openExternal(vscode.Uri.parse(res.prUrl));
+              vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+              this._view?.webview.postMessage({
+                type: 'PR_CREATED',
+                result: res
+              });
+            } else {
+              vscode.window.showErrorMessage(`GitWizard PR Error: ${res.error || res.message}`);
+              this._view?.webview.postMessage({
+                type: 'PR_ERROR',
+                error: res.error || res.message
+              });
+            }
+          } catch (err: any) {
+            vscode.window.showErrorMessage(`GitWizard PR Error: ${err.message}`);
+            this._view?.webview.postMessage({
+              type: 'PR_ERROR',
+              error: err.message
+            });
+          }
+          break;
+        }
       }
     });
   }
@@ -903,6 +987,7 @@ export function activate(context: vscode.ExtensionContext) {
   const aiSplitter = new AISplitterEngine(git, aiService, licenseManager, splitterWizard);
   const conflictResolver = new ConflictResolverEngine(git, snapshotManager, licenseManager, aiService);
   const cloudSync = new CloudSyncEngine(git, snapshotManager, licenseManager);
+  const prWizard = new PullRequestWizard(git, aiCommitWizard, licenseManager);
 
   // Status Bar Item
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -957,11 +1042,47 @@ export function activate(context: vscode.ExtensionContext) {
     aiSplitter,
     conflictResolver,
     cloudSync,
+    prWizard,
     updateStatusBar
   );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(GitWizardSidebarProvider.viewType, provider)
+  );
+
+  // Register Virtual Snapshot Document Provider for side-by-side diffs
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('gitwizard-snapshot', new SnapshotContentProvider(snapshotManager))
+  );
+
+  // Register Diff Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.openSnapshotDiff', async (snapshotId: string, filePath: string, label?: string) => {
+      if (!snapshotId || !filePath) return;
+      const leftUri = vscode.Uri.parse(`gitwizard-snapshot://${snapshotId}/${filePath.replace(/\\/g, '/')}`);
+      const rightUri = vscode.Uri.file(path.join(rootPath, filePath));
+      const title = `${path.basename(filePath)} (${label || 'Snapshot'}) ↔ (Current)`;
+      await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+    })
+  );
+
+  // Register 1-Click Pull Request Command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('gitwizard.createPullRequest', async () => {
+      try {
+        vscode.window.showInformationMessage('GitWizard: Analyzing branch and creating PR on GitHub...');
+        aiService.updateConfig(getActiveAIConfig());
+        const res = await prWizard.createPullRequest({ generateWithAI: true });
+        if (res.success && res.prUrl) {
+          await vscode.env.openExternal(vscode.Uri.parse(res.prUrl));
+          vscode.window.showInformationMessage(`GitWizard: ${res.message}`);
+        } else {
+          vscode.window.showErrorMessage(`GitWizard: ${res.error || res.message}`);
+        }
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`GitWizard PR Error: ${err.message}`);
+      }
+    })
   );
 
   // Passive Auto-Checkpoint File Watcher: captures shadow snapshots on save

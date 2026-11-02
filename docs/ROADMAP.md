@@ -19,6 +19,7 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
 | **Sprint 9: Surgical File Rewind & AI Auto-Splitter** | Per-file rollback, multi-branch AST semantic clustering, 101 unit tests | Completed (Verified) |
 | **Sprint 10: Smart AI Conflict Resolver & Cloud Sync** | 3-way conflict resolver, AES-256 encrypted private cloud sync, v2.0.0 release | Completed (Verified) |
 | **Sprint 11: The Vibe-First UX Transformation** | 5-phase onboarding, empty state airbag, de-jargonization, guided GitHub sync, Playbook guide | Completed (Verified) |
+| **Sprint 12: Visual Diff Inspector (P7) & 1-Click PR Creator** | Virtual snapshot document provider, native side-by-side diffing, automated GitHub PR creator | Completed (Verified) |
 
 ---
 
@@ -358,3 +359,32 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] Add real-time visual feedback button state (`⏳ Capturing Snapshot...` → `✅ Quick Snapshot (HH:MM)`).
   - [x] Replace browser `window.alert()` calls with native VS Code toast messages (`SHOW_WARNING` & `SHOW_ERROR`).
   - [x] Add automated test coverage in `test/wizards/checkpoint.test.ts` (143/143 tests passing across 25 suites).
+
+---
+
+## 🚀 Sprint 12: Visual Diff Inspector (P7) & 1-Click PR Creator
+
+> **Objective**: Enable visual side-by-side snapshot inspection using VS Code's native diff editor, and provide a 1-click automated GitHub Pull Request creator with AI summaries.  
+> **Reference Specs**: Pro Feature P7 in [docs/PRO_SPECIFICATION.md](file:///c:/Users/user/Desktop/Dr_OpenSource/Projects/GitWizard/docs/PRO_SPECIFICATION.md).
+
+---
+
+### Sprint 12 Task Checklist:
+
+- [x] **Chunk 12.1: Virtual Snapshot Document Provider & Plumbed Diff Engine (`src/engine/snapshot.ts` & `src/extension/index.ts`)**
+  - [x] Add `getFileContent(snapshotId: string, filePath: string)` to `SnapshotManager` reading content from snapshot commit ref via `git show`.
+  - [x] Register `vscode.workspace.registerTextDocumentContentProvider('gitwizard-snapshot', ...)` in `src/extension/index.ts`.
+  - [x] Implement `OPEN_SNAPSHOT_DIFF` handler launching `vscode.diff` between virtual snapshot buffer and current file.
+- [x] **Chunk 12.2: 1-Click GitHub Pull Request Wizard (`src/wizards/ai-commit.ts` & `src/wizards/pr.ts`)**
+  - [x] Implement `createPullRequest()` handling branch push, `gh pr create` invocation with automated fallback to GitHub web compare URL.
+  - [x] Parse remote `origin` into owner/repo format for web fallback.
+- [x] **Chunk 12.3: Webview UI Integration (`src/webview/App.tsx`)**
+  - [x] Add `[🔍 View Diff]` buttons on affected files in the Checkpoint Rewind preview modal.
+  - [x] Add `[🔍 Preview Diff]` in the Single-File Rewind modal.
+  - [x] Add `[🚀 Create PR on GitHub]` card and trigger in Tab 1 (Everyday Deck) and Tab 3 (Split Deck).
+- [x] **Chunk 12.4: Comprehensive Unit & Integration Test Suite**
+  - [x] Test `getFileContent` in `test/engine/snapshot.test.ts` (existing and non-existing files).
+  - [x] Test PR creation logic and URL parsing in `test/wizards/pr.test.ts` (8/8 tests passing).
+- [x] **Chunk 12.5: Verification Gate**
+  - [x] Typecheck passing (`npm run compile`).
+  - [x] All automated tests passing (`npm test` - 152/152 tests across 26 suites).

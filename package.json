@@ -145,6 +145,16 @@
         "command": "gitwizard.cloudPull",
         "title": "GitWizard Pro: Pull Encrypted Snapshots from Remote",
         "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.createPullRequest",
+        "title": "GitWizard Pro: 1-Click Create Pull Request on GitHub",
+        "category": "GitWizard"
+      },
+      {
+        "command": "gitwizard.openSnapshotDiff",
+        "title": "GitWizard Pro: Visual Snapshot Diff Inspector",
+        "category": "GitWizard"
       }
     ],
     "configuration": {

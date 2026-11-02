@@ -185,4 +185,32 @@ export class SnapshotManager {
       fs.unlinkSync(metaPath);
     }
   }
+
+  /**
+   * Retrieves metadata for a specific snapshot by id.
+   */
+  getSnapshot(id: string): SnapshotMetadata | null {
+    const metaPath = path.join(this.metadataDir, `${id}.json`);
+    if (fs.existsSync(metaPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Retrieves the raw content of a file at a specific snapshot point.
+   * Uses low-level git show <snapshotSha>:<path>. If file or snapshot not found, returns empty string.
+   */
+  async getFileContent(id: string, filePath: string): Promise<string> {
+    const meta = this.getSnapshot(id);
+    const targetRef = meta ? meta.snapshotSha : `refs/gitwizard/snapshots/${id}`;
+    const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\//, '');
+
+    const res = await this.git.exec(['show', `${targetRef}:${normalizedPath}`], { allowFailure: true });
+    return res.exitCode === 0 ? res.stdout : '';
+  }
 }

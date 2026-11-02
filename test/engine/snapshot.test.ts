@@ -112,5 +112,29 @@ describe('SnapshotManager', () => {
     expect(status.staged).toHaveLength(0);
     expect(status.modified).toContain('initial.txt');
   });
-});
 
+  it('retrieves raw file content at specific snapshot point and returns empty on non-existent file', async () => {
+    fs.writeFileSync(path.join(testRepoPath, 'file1.txt'), 'version 1 content');
+    const snap1 = await snapshotManager.createSnapshot('version-1');
+
+    fs.writeFileSync(path.join(testRepoPath, 'file1.txt'), 'version 2 modified');
+    const snap2 = await snapshotManager.createSnapshot('version-2');
+
+    // Retrieve file content at snap1
+    const contentSnap1 = await snapshotManager.getFileContent(snap1.id, 'file1.txt');
+    expect(contentSnap1.trim()).toBe('version 1 content');
+
+    // Retrieve file content at snap2
+    const contentSnap2 = await snapshotManager.getFileContent(snap2.id, 'file1.txt');
+    expect(contentSnap2.trim()).toBe('version 2 modified');
+
+    // Retrieve non-existent file
+    const nonExistent = await snapshotManager.getFileContent(snap1.id, 'does_not_exist.txt');
+    expect(nonExistent).toBe('');
+
+    // Retrieve snapshot metadata
+    const meta = snapshotManager.getSnapshot(snap1.id);
+    expect(meta).not.toBeNull();
+    expect(meta?.label).toBe('version-1');
+  });
+});

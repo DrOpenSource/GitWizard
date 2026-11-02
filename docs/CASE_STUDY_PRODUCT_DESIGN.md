@@ -330,6 +330,23 @@ sequenceDiagram
 
 ---
 
+---
+
+### 🔍 Sprint 12 Innovation: Native Visual Diff Inspector & 1-Click PR Creator
+* **Status**: 🟢 Completed & Verified (`test/wizards/pr.test.ts`, 152 passing tests across 26 suites)
+* **Design & Engineering Interventions Implemented**:
+  1. **Virtual Snapshot Diff Inspector (Feature P7)**:
+     - Registered a custom `vscode.TextDocumentContentProvider` for scheme `gitwizard-snapshot://<snapshotId>/<filePath>`.
+     - Clicking `[🔍 Diff]` on any affected file in checkpoint rewind or single-file rewind opens VS Code's native side-by-side diff editor (`vscode.diff`) comparing the virtual snapshot against the active file.
+  2. **1-Click GitHub Pull Request Creator**:
+     - Built `PullRequestWizard` (`src/wizards/pr.ts`) with automatic branch push and dual-mode delivery:
+       - **GitHub CLI (`gh`) Mode**: Creates PR directly and prints URL if `gh` is installed.
+       - **Zero-Install Web Fallback Mode**: Generates pre-filled GitHub web compare link (`https://github.com/owner/repo/compare/main...branch?expand=1&title=...&body=...`).
+     - Added in-sidebar PR modal with 1-click `✨ AI Fill` powered by `AICommitWizard`.
+* **Before vs. After UX Comparison**:
+  - *Before*: Users had to guess what code was in a snapshot before rewinding; creating a PR required navigating out to GitHub, opening the compare tab, and manually writing descriptions.
+  - *After*: 1-click native side-by-side diff preview; 1-click instant PR creation with AI descriptions.
+
 ## 📊 Live Metrics & Impact Scorecard
 
 | Metric | Baseline (v2.0.0) | Target (v2.1.0+) | Actual Result |
@@ -340,7 +357,7 @@ sequenceDiagram
 | **Push Error Rate (No origin)** | 100% fail on local repos | 0% (guided assistant) | **0%** (Verified: Guided GitHub Connect Assistant with auto-backup) |
 | **Marketplace Readability Grade** | Grade 14 (College level) | Grade 8 (Plain English) | **Grade 7.6** (Verified: Reading Ease 61.2, Plain English) |
 | **Modal Interruption Rate** (Prompt / Alert) | 100% (blocking browser dialogs) | 0% (zero blocking prompts) | **0%** (Verified: Instant timestamped snapshot + native VS Code toasts) |
-| **Automated Test Coverage & Health** | 55 passing tests (v1.0.0) | >100 passing tests | **143 passing tests** (100% pass across 25 suites) |
+| **Automated Test Coverage & Health** | 55 passing tests (v1.0.0) | >100 passing tests | **152 passing tests** (100% pass across 26 suites) |
 
 ---
 

@@ -76,6 +76,7 @@ interface ConfirmModalData {
   consequences: string[];
   confirmButtonText: string;
   onConfirm: () => void;
+  snapshotId?: string;
   affectedFiles?: Array<{ path: string; status?: 'modified' | 'added' | 'deleted' }>;
   safetyGuarantee?: string;
   isLoadingDiff?: boolean;
@@ -108,6 +109,13 @@ export const App: React.FC = () => {
     suggestedFeatureBranch: string;
     message: string;
   } | null>(null);
+
+  // Sprint 12: Visual Diff & 1-Click Pull Request State
+  const [showPRModal, setShowPRModal] = useState(false);
+  const [prTitle, setPrTitle] = useState('');
+  const [prBody, setPrBody] = useState('');
+  const [isGeneratingPR, setIsGeneratingPR] = useState(false);
+  const [isSubmittingPR, setIsSubmittingPR] = useState(false);
 
   // Sprint 9: Surgical File Rewind & AI Semantic Auto-Split
   const [isSplittingAI, setIsSplittingAI] = useState(false);
@@ -314,6 +322,18 @@ export const App: React.FC = () => {
         if (data.webFallbackUrl) {
           setSplitRepoFallbackUrl(data.webFallbackUrl);
         }
+      } else if (data.type === 'PR_SUMMARY_GENERATED') {
+        setIsGeneratingPR(false);
+        if (data.title) setPrTitle(data.title);
+        if (data.body) setPrBody(data.body);
+        if (data.error && !data.title) {
+          vscode.postMessage({ type: 'SHOW_WARNING', message: data.error });
+        }
+      } else if (data.type === 'PR_CREATED') {
+        setIsSubmittingPR(false);
+        setShowPRModal(false);
+      } else if (data.type === 'PR_ERROR') {
+        setIsSubmittingPR(false);
       }
     };
 
@@ -625,6 +645,49 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleOpenSnapshotDiff = (snapshotId: string, snapshotLabel: string, filePath: string) => {
+    vscode.postMessage({
+      type: 'OPEN_SNAPSHOT_DIFF',
+      snapshotId,
+      snapshotLabel,
+      filePath
+    });
+  };
+
+  const handleOpenPRModal = () => {
+    setShowPRModal(true);
+    setPrTitle(`feat(${status?.branch || 'feature'}): updates from ${status?.branch || 'feature'}`);
+    setPrBody(`### 🎯 Pull Request Summary\nCreated with GitWizard from \`${status?.branch || 'feature'}\` into \`main\`.\n\n### 🛠️ Changes Made\n- Updates from active development branch`);
+    setIsGeneratingPR(true);
+    vscode.postMessage({
+      type: 'GENERATE_PR_SUMMARY',
+      baseBranch: 'main'
+    });
+  };
+
+  const handleRegenerateAIPR = () => {
+    setIsGeneratingPR(true);
+    vscode.postMessage({
+      type: 'GENERATE_PR_SUMMARY',
+      baseBranch: 'main'
+    });
+  };
+
+  const handleSubmitPR = () => {
+    if (!prTitle.trim()) {
+      vscode.postMessage({ type: 'SHOW_WARNING', message: 'Please provide a title for your Pull Request.' });
+      return;
+    }
+    setIsSubmittingPR(true);
+    vscode.postMessage({
+      type: 'CREATE_PULL_REQUEST',
+      headBranch: status?.branch,
+      baseBranch: 'main',
+      title: prTitle.trim(),
+      body: prBody.trim()
+    });
+  };
+
   const handleInstantManualSave = () => {
     if (status?.isRepo === false) {
       handleInitRepo();
@@ -646,6 +709,7 @@ export const App: React.FC = () => {
 
     setConfirmModal({
       title: `⏪ Rewind Workspace to: "${cleanName}"`,
+      snapshotId: snap.id,
       description: `Restore your files to the state captured at ${new Date(snap.timestamp).toLocaleTimeString()}.`,
       safetyGuarantee: 'GitWizard automatically captures a safety snapshot of your current screen before rewinding. You can return to your exact current work at any time.',
       isLoadingDiff: true,
@@ -736,6 +800,164 @@ export const App: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '12px' }}>
       {/* Git Author Identity Modal */}
+
+      {/* Sprint 12: Pull Request Modal */}
+      {showPRModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10007,
+            padding: '12px'
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--vscode-sideBar-background, #1e1e1e)',
+              border: '1px solid rgba(168, 85, 247, 0.4)',
+              borderRadius: '8px',
+              padding: '16px',
+              maxWidth: '380px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', color: '#e9d5ff' }}>
+                <span>🚀</span> Create Pull Request on GitHub
+              </div>
+              <button
+                onClick={() => setShowPRModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--vscode-foreground)',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: '11px', opacity: 0.85, lineHeight: '1.4' }}>
+              Push your branch and propose merging into <code>main</code> on GitHub with zero terminal commands.
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', background: 'rgba(255,255,255,0.05)', padding: '6px 8px', borderRadius: '4px' }}>
+              <span style={{ fontWeight: 600 }}>Branch Flow:</span>
+              <span style={{ color: '#a78bfa', fontFamily: 'monospace' }}>{status?.branch || 'feature'}</span>
+              <span>➔</span>
+              <span style={{ color: '#86efac', fontFamily: 'monospace' }}>main</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600 }}>Pull Request Title:</div>
+              <input
+                type="text"
+                value={prTitle}
+                onChange={(e) => setPrTitle(e.target.value)}
+                placeholder="e.g. feat(auth): add login form"
+                style={{
+                  width: '100%',
+                  padding: '6px',
+                  background: 'var(--vscode-input-background, #252526)',
+                  color: 'var(--vscode-input-foreground, #ccc)',
+                  border: '1px solid var(--vscode-input-border, rgba(255,255,255,0.15))',
+                  borderRadius: '4px',
+                  fontSize: '11px'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600 }}>Description:</span>
+                <button
+                  onClick={handleRegenerateAIPR}
+                  disabled={isGeneratingPR}
+                  style={{
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    background: 'rgba(168, 85, 247, 0.15)',
+                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                    color: '#e9d5ff',
+                    borderRadius: '3px',
+                    cursor: isGeneratingPR ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isGeneratingPR ? '⏳ AI Drafting...' : '✨ AI Fill'}
+                </button>
+              </div>
+              <textarea
+                value={prBody}
+                onChange={(e) => setPrBody(e.target.value)}
+                rows={5}
+                placeholder="Describe what changed..."
+                style={{
+                  width: '100%',
+                  padding: '6px',
+                  background: 'var(--vscode-input-background, #252526)',
+                  color: 'var(--vscode-input-foreground, #ccc)',
+                  border: '1px solid var(--vscode-input-border, rgba(255,255,255,0.15))',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button
+                onClick={() => setShowPRModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '6px',
+                  background: 'var(--vscode-button-secondaryBackground, #3a3d41)',
+                  color: 'var(--vscode-button-secondaryForeground, #fff)',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitPR}
+                disabled={isSubmittingPR}
+                style={{
+                  flex: 2,
+                  padding: '6px',
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isSubmittingPR ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: '11px'
+                }}
+              >
+                {isSubmittingPR ? '⏳ Creating PR on GitHub...' : '🚀 Submit PR to GitHub'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showIdentityModal && (
         <div
           style={{
@@ -1091,11 +1313,31 @@ export const App: React.FC = () => {
                             {f.path}
                           </span>
                         </div>
-                        {f.status && (
-                          <span style={{ opacity: 0.6, fontSize: '9px', textTransform: 'capitalize' }}>
-                            {f.status}
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {f.status && (
+                            <span style={{ opacity: 0.6, fontSize: '9px', textTransform: 'capitalize' }}>
+                              {f.status}
+                            </span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSnapshotDiff(confirmModal.snapshotId || '', confirmModal.title || '', f.path);
+                            }}
+                            title="Inspect side-by-side diff against current working file"
+                            style={{
+                              padding: '1px 5px',
+                              fontSize: '9px',
+                              background: 'rgba(99, 102, 241, 0.15)',
+                              border: '1px solid rgba(99, 102, 241, 0.3)',
+                              color: '#c7d2fe',
+                              borderRadius: '3px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🔍 Diff
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1265,6 +1507,31 @@ export const App: React.FC = () => {
                 }}
               >
                 Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (fileRewindTarget && fileRewindTarget.selectedFile.trim()) {
+                    handleOpenSnapshotDiff(
+                      fileRewindTarget.snapshot.id,
+                      fileRewindTarget.snapshot.label,
+                      fileRewindTarget.selectedFile.trim()
+                    );
+                  }
+                }}
+                disabled={!fileRewindTarget.selectedFile.trim()}
+                title="Inspect side-by-side diff between this snapshot and current file"
+                style={{
+                  padding: '6px 10px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  color: '#c7d2fe',
+                  borderRadius: '4px',
+                  cursor: !fileRewindTarget.selectedFile.trim() ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  fontSize: '11px'
+                }}
+              >
+                🔍 Preview Diff
               </button>
               <button
                 onClick={handleConfirmFileRewind}
@@ -2622,6 +2889,31 @@ export const App: React.FC = () => {
             <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '6px' }}>
               🛡️ Safe Pull automatically restores if remote changes conflict.
             </div>
+
+            {status?.branch && status.branch !== 'main' && status.branch !== 'master' && (
+              <button
+                onClick={handleOpenPRModal}
+                title="Create or open a Pull Request on GitHub for this feature branch"
+                style={{
+                  marginTop: '8px',
+                  width: '100%',
+                  padding: '7px 10px',
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25))',
+                  border: '1px solid rgba(168, 85, 247, 0.4)',
+                  color: '#e9d5ff',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                🚀 Create Pull Request on GitHub (1-Click)
+              </button>
+            )}
           </div>
 
           {/* Section: Branches */}

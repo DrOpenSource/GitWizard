@@ -80,4 +80,11 @@ export class CheckpointWizard {
         return { path: filePath, status };
       });
   }
+
+  /**
+   * Get raw file content from a checkpoint.
+   */
+  async getFileContent(snapshotId: string, filePath: string): Promise<string> {
+    return await this.snapshotManager.getFileContent(snapshotId, filePath);
+  }
 }
