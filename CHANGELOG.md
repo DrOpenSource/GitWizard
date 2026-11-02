@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-11-02
+
+### Added
+- **Visual Side-by-Side Snapshot Diff Inspector (Feature P7)**:
+  - Custom `vscode.TextDocumentContentProvider` for scheme `gitwizard-snapshot://<snapshotId>/<filePath>`.
+  - Added 1-click `[🔍 Diff]` button to all affected files in the Checkpoint Rewind preview modal.
+  - Added `[🔍 Preview Diff]` in the Single-File Rewind modal to visually verify changes before confirming file rewind.
+  - Side-by-side diffing launches directly in VS Code's native diff editor (`vscode.diff`) against working tree files.
+- **1-Click GitHub Pull Request Wizard**:
+  - `PullRequestWizard` (`src/wizards/pr.ts`) with remote URL parser and automatic branch push.
+  - Dual-mode PR creation: direct via GitHub CLI (`gh pr create`) with automated fallback to pre-filled GitHub web compare URLs.
+  - In-sidebar modal in Tab 1 (Everyday Deck) with branch flow diagram (`feature` ➔ `main`), editable title, description, and `[✨ AI Fill]` integration.
+
+---
+
 ## [2.1.0] - 2026-11-02
 
 ### Added

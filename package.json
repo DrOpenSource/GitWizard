@@ -2,7 +2,7 @@
   "name": "gitwizard",
   "displayName": "GitWizard: The Undo Button for AI Coders",
   "description": "The calm flight recorder and undo button for vibe coders using Cursor, Claude, Antigravity, and Copilot. Zero git crashes, zero terminal jargon.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "icon": "assets/icon.png",
   "publisher": "dr-opensource",
   "engines": {
