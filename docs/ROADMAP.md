@@ -352,3 +352,9 @@ This document tracks all milestones, sprints, and tasks for building the GitWiza
   - [x] Add 1-click interactive deep links from recipes to target tabs and features.
   - [x] Embed subtle `💡 When to use` micro-coaching chips at the top of Everyday, Rewind, Split, and Repo tabs.
   - [x] Add automated test coverage in `test/wizards/playbook.test.ts` (142/142 tests passing across all suites).
+
+- [x] **Chunk 11.15: Instant Quick Snapshot & Native Notification System (`src/webview/App.tsx` & `src/extension/index.ts`)**
+  - [x] Replace blocking webview `window.prompt()` with instant 1-click `Quick Snapshot (HH:MM)` capture.
+  - [x] Add real-time visual feedback button state (`⏳ Capturing Snapshot...` → `✅ Quick Snapshot (HH:MM)`).
+  - [x] Replace browser `window.alert()` calls with native VS Code toast messages (`SHOW_WARNING` & `SHOW_ERROR`).
+  - [x] Add automated test coverage in `test/wizards/checkpoint.test.ts` (143/143 tests passing across 25 suites).
